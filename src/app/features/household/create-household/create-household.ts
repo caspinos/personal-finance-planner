@@ -86,9 +86,21 @@ export class CreateHousehold {
       await this.households.createHousehold(name);
       await this.router.navigateByUrl('/');
     } catch (error) {
-      this.errorMessage.set(error instanceof Error ? error.message : 'Something went wrong.');
+      this.errorMessage.set(this.extractMessage(error));
     } finally {
       this.submitting.set(false);
     }
+  }
+
+  private extractMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    if (error && typeof error === 'object' && 'message' in error) {
+      return String((error as { message: unknown }).message);
+    }
+
+    return 'Something went wrong.';
   }
 }
