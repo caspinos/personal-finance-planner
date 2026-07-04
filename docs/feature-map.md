@@ -59,12 +59,13 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   forms — all built with spartan/ui (`select`, `toggle-group`, `field`, etc.)
 - ✅ End-to-end verified in-browser: create envelopes, record a transaction,
   transfer between envelopes, balances carry over to the next month
-- ⬜ Editing/deleting individual transactions or transfers from the UI
-  (DB policies allow it; no UI yet)
+- ✅ Editing/deleting individual transactions or transfers from the UI
+  (available from the per-envelope activity history)
 - ⬜ Archiving/unarchiving envelopes from the UI (`setEnvelopeArchived`
   exists on the service; no UI control yet)
 - ⬜ Recurring transactions
-- ⬜ Per-envelope transaction history view
+- ✅ Per-envelope transaction history view with monthly filtering, edit links,
+  and delete actions for transactions/transfers
 
 ## 3. Net worth & investments — Stage 3
 

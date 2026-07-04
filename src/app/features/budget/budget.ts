@@ -48,7 +48,9 @@ function endOfMonth(date: Date): Date {
         <div class="flex flex-wrap gap-2">
           <a hlmBtn variant="outline" size="sm" routerLink="/budget/transfers/new">Transfer</a>
           <a hlmBtn size="sm" routerLink="/budget/transactions/new">Record transaction</a>
-          <a hlmBtn variant="secondary" size="sm" routerLink="/budget/envelopes/new">New envelope</a>
+          <a hlmBtn variant="secondary" size="sm" routerLink="/budget/envelopes/new"
+            >New envelope</a
+          >
         </div>
       </div>
 
@@ -77,6 +79,16 @@ function endOfMonth(date: Date): Date {
                   {{ balances()[envelope.id] ?? 0 | number: '1.2-2' }}
                 </p>
               </div>
+              <div hlmCardFooter>
+                <a
+                  hlmBtn
+                  variant="outline"
+                  size="sm"
+                  [routerLink]="['/budget/envelopes', envelope.id]"
+                >
+                  View history
+                </a>
+              </div>
             </div>
           }
         </div>
@@ -93,7 +105,7 @@ export class Budget {
   protected readonly balances = this.budget.balances;
 
   protected readonly monthLabel = computed(() =>
-    this.month().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    this.month().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
   );
 
   constructor() {

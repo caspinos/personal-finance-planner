@@ -35,6 +35,66 @@ test.describe('Budget envelopes', () => {
     await expectEnvelopeBalance(page, 'Groceries', '380.00');
   });
 
+  test('shows envelope history and edits and deletes a transaction', async ({ page }) => {
+    await createEnvelope(page, 'Groceries');
+    await recordTransaction(page, {
+      type: 'Income',
+      envelope: 'Groceries',
+      amount: '500',
+      description: 'Initial funding',
+    });
+
+    const card = page.locator('[hlmCard]').filter({ hasText: 'Groceries' });
+    await card.getByRole('link', { name: 'View history' }).click();
+    await expect(page).toHaveURL(/\/budget\/envelopes\/.+/);
+    await expect(page.getByText('Initial funding')).toBeVisible();
+    await expect(page.getByText('500.00 PLN')).toBeVisible();
+
+    await page.getByRole('link', { name: 'Edit' }).click();
+    await expect(page).toHaveURL(/\/budget\/transactions\/.+\/edit/);
+    await page.getByLabel('Amount').fill('650');
+    await page.getByLabel('Description (optional)').fill('Adjusted funding');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+
+    await expect(page).toHaveURL(/\/budget\/envelopes\/.+/);
+    await expect(page.getByText('Adjusted funding')).toBeVisible();
+    await expect(page.getByText('650.00 PLN')).toBeVisible();
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Delete' }).click();
+    await expect(page.getByText('No activity recorded for this month.')).toBeVisible();
+    await expect(page.getByText('0.00', { exact: true })).toBeVisible();
+  });
+
+  test('shows envelope history and edits and deletes a transfer', async ({ page }) => {
+    await createEnvelope(page, 'Groceries');
+    await createEnvelope(page, 'Fun money');
+
+    await recordTransaction(page, { type: 'Income', envelope: 'Groceries', amount: '500' });
+    await transferFunds(page, { from: 'Groceries', to: 'Fun money', amount: '100' });
+
+    const card = page.locator('[hlmCard]').filter({ hasText: 'Groceries' });
+    await card.getByRole('link', { name: 'View history' }).click();
+    await expect(page.getByText('Transfer to Fun money')).toBeVisible();
+    await expect(page.getByText('-100.00 PLN')).toBeVisible();
+
+    let transferRow = page.locator('li').filter({ hasText: 'Transfer to Fun money' });
+    await transferRow.getByRole('link', { name: 'Edit' }).click();
+    await expect(page).toHaveURL(/\/budget\/transfers\/.+\/edit/);
+    await page.getByLabel('Amount').fill('125');
+    await page.getByLabel('Description (optional)').fill('Adjusted transfer');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+
+    await expect(page).toHaveURL(/\/budget\/envelopes\/.+/);
+    await expect(page.getByText('Adjusted transfer')).toBeVisible();
+    await expect(page.getByText('-125.00 PLN')).toBeVisible();
+
+    transferRow = page.locator('li').filter({ hasText: 'Adjusted transfer' });
+    page.once('dialog', (dialog) => dialog.accept());
+    await transferRow.getByRole('button', { name: 'Delete' }).click();
+    await expect(page.getByText('Transfer to Fun money')).not.toBeVisible();
+  });
+
   test('transfers funds between envelopes and carries balances into the next month', async ({
     page,
   }) => {

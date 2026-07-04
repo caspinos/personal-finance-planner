@@ -17,7 +17,7 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () =>
       import('./features/household/create-household/create-household').then(
-        (m) => m.CreateHousehold
+        (m) => m.CreateHousehold,
       ),
   },
   {
@@ -39,14 +39,33 @@ export const routes: Routes = [
           import('./features/budget/envelope-form/envelope-form').then((m) => m.EnvelopeForm),
       },
       {
+        path: 'budget/envelopes/:id',
+        loadComponent: () =>
+          import('./features/budget/envelope-history/envelope-history').then(
+            (m) => m.EnvelopeHistory,
+          ),
+      },
+      {
         path: 'budget/transactions/new',
         loadComponent: () =>
           import('./features/budget/transaction-form/transaction-form').then(
-            (m) => m.TransactionForm
+            (m) => m.TransactionForm,
+          ),
+      },
+      {
+        path: 'budget/transactions/:id/edit',
+        loadComponent: () =>
+          import('./features/budget/transaction-form/transaction-form').then(
+            (m) => m.TransactionForm,
           ),
       },
       {
         path: 'budget/transfers/new',
+        loadComponent: () =>
+          import('./features/budget/transfer-form/transfer-form').then((m) => m.TransferForm),
+      },
+      {
+        path: 'budget/transfers/:id/edit',
         loadComponent: () =>
           import('./features/budget/transfer-form/transfer-form').then((m) => m.TransferForm),
       },
