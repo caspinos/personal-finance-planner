@@ -1,0 +1,7 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "supabase": true,
+        "npx supabase": true,
+        "npx ng": true
+    }
+}
