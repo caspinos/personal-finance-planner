@@ -99,6 +99,32 @@ export const routes: Routes = [
             (m) => m.ValuationForm,
           ),
       },
+      {
+        path: 'net-worth/holdings/new',
+        loadComponent: () =>
+          import('./features/net-worth/holding-form/holding-form').then((m) => m.HoldingForm),
+      },
+      {
+        path: 'net-worth/holdings/transactions/new',
+        loadComponent: () =>
+          import('./features/net-worth/holding-transaction-form/holding-transaction-form').then(
+            (m) => m.HoldingTransactionForm,
+          ),
+      },
+      {
+        path: 'net-worth/holdings/transactions/:id/edit',
+        loadComponent: () =>
+          import('./features/net-worth/holding-transaction-form/holding-transaction-form').then(
+            (m) => m.HoldingTransactionForm,
+          ),
+      },
+      {
+        path: 'net-worth/holdings/:id',
+        loadComponent: () =>
+          import('./features/net-worth/holding-history/holding-history').then(
+            (m) => m.HoldingHistory,
+          ),
+      },
     ],
   },
 ];

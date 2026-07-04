@@ -1,7 +1,14 @@
 import { expect, test } from '@playwright/test';
 
 import { signUpWithHousehold } from './support/auth';
-import { addValuationFromAccountCard, createAccount, expectAccountValue, expectTotalNetWorth } from './support/net-worth';
+import {
+  addValuationFromAccountCard,
+  createAccount,
+  createHolding,
+  expectAccountValue,
+  expectTotalNetWorth,
+  recordHoldingTransaction,
+} from './support/net-worth';
 
 test.describe('Net worth', () => {
   test.beforeEach(async ({ page }) => {
@@ -88,6 +95,68 @@ test.describe('Net worth', () => {
     page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Delete' }).click();
     await expect(page.getByText('No valuations recorded yet.')).toBeVisible();
+  });
+
+  test('records buy and sell holding transactions and computes the position', async ({
+    page,
+  }) => {
+    await createAccount(page, { name: 'Brokerage', type: 'Investment account' });
+
+    const card = page.locator('[hlmCard]').filter({ hasText: 'Brokerage' });
+    await card.getByRole('link', { name: 'View history' }).click();
+    await expect(page).toHaveURL(/\/net-worth\/accounts\/.+/);
+
+    await createHolding(page, { name: 'Acme Corp', ticker: 'ACME' });
+    await expect(page.getByText('0 units')).toBeVisible();
+
+    const holdingRow = page.locator('li').filter({ hasText: 'Acme Corp' });
+    await holdingRow.getByRole('link', { name: 'View history' }).click();
+    await expect(page).toHaveURL(/\/net-worth\/holdings\/.+/);
+
+    await recordHoldingTransaction(page, { quantity: '10', pricePerUnit: '20' });
+    await expect(page.getByText('Buy 10 @ 20')).toBeVisible();
+    await expect(page.getByText('200.00 PLN')).toBeVisible();
+
+    await recordHoldingTransaction(page, { type: 'Sell', quantity: '4', pricePerUnit: '25' });
+    await expect(page.getByText('Sell 4 @ 25')).toBeVisible();
+    await expect(page.getByText('150.00 PLN')).toBeVisible();
+    await expect(page.getByText('30.00 PLN')).toBeVisible();
+
+    await page.getByRole('link', { name: 'Back to account' }).click();
+    await expect(page).toHaveURL(/\/net-worth\/accounts\/.+/);
+    await expect(page.getByText('6 units')).toBeVisible();
+  });
+
+  test('edits and deletes a holding transaction', async ({ page }) => {
+    await createAccount(page, { name: 'Brokerage', type: 'Investment account' });
+
+    const card = page.locator('[hlmCard]').filter({ hasText: 'Brokerage' });
+    await card.getByRole('link', { name: 'View history' }).click();
+
+    await createHolding(page, { name: 'Acme Corp' });
+
+    const holdingRow = page.locator('li').filter({ hasText: 'Acme Corp' });
+    await holdingRow.getByRole('link', { name: 'View history' }).click();
+
+    await recordHoldingTransaction(page, {
+      quantity: '10',
+      pricePerUnit: '20',
+      note: 'Initial buy',
+    });
+
+    await page.getByRole('link', { name: 'Edit' }).click();
+    await expect(page).toHaveURL(/\/net-worth\/holdings\/transactions\/.+\/edit/);
+    await page.getByLabel('Quantity').fill('15');
+    await page.getByLabel('Note (optional)').fill('Adjusted buy');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+
+    await expect(page).toHaveURL(/\/net-worth\/holdings\/.+/);
+    await expect(page.getByText('Buy 15 @ 20')).toBeVisible();
+    await expect(page.getByText('Adjusted buy')).toBeVisible();
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Delete' }).click();
+    await expect(page.getByText('No transactions recorded yet.')).toBeVisible();
   });
 
   test('archives and unarchives an account from its history page', async ({ page }) => {

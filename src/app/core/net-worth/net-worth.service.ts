@@ -58,6 +58,48 @@ export interface NetWorthSummaryRow {
   signed_value: number;
 }
 
+export type AssetTransactionType = 'buy' | 'sell';
+
+export interface AssetHolding {
+  id: string;
+  household_id: string;
+  asset_account_id: string;
+  name: string;
+  ticker: string | null;
+  currency: string;
+  archived: boolean;
+  created_by: string;
+  created_at: string;
+}
+
+export interface AssetTransaction {
+  id: string;
+  household_id: string;
+  asset_holding_id: string;
+  type: AssetTransactionType;
+  quantity: number;
+  price_per_unit: number;
+  fee: number;
+  occurred_on: string;
+  note: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface HoldingPosition {
+  holding_id: string;
+  holding_name: string;
+  ticker: string | null;
+  asset_account_id: string;
+  currency: string;
+  quantity: number;
+  average_cost: number;
+  invested_amount: number;
+  latest_price: number;
+  market_value: number;
+  unrealized_gain: number;
+}
+
 function toDateOnly(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -73,6 +115,8 @@ export class NetWorthService {
 
   private readonly accountsSignal = signal<AssetAccount[]>([]);
   private readonly summarySignal = signal<NetWorthSummaryRow[]>([]);
+  private readonly holdingsSignal = signal<AssetHolding[]>([]);
+  private readonly positionsSignal = signal<HoldingPosition[]>([]);
 
   readonly accounts = this.accountsSignal.asReadonly();
   readonly activeAccounts = computed(() => this.accountsSignal().filter((account) => !account.archived));
@@ -80,6 +124,11 @@ export class NetWorthService {
   readonly totalNetWorth = computed(() =>
     this.summarySignal().reduce((total, row) => total + row.signed_value, 0),
   );
+  readonly holdings = this.holdingsSignal.asReadonly();
+  readonly activeHoldings = computed(() =>
+    this.holdingsSignal().filter((holding) => !holding.archived),
+  );
+  readonly positions = this.positionsSignal.asReadonly();
 
   async loadAccounts(): Promise<AssetAccount[]> {
     const householdId = this.requireHouseholdId();
@@ -309,6 +358,225 @@ export class NetWorthService {
       .delete()
       .eq('household_id', householdId)
       .eq('id', valuationId);
+
+    if (error) {
+      throw error;
+    }
+  }
+
+  async loadHoldings(accountId: string): Promise<AssetHolding[]> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('asset_holdings')
+      .select('*')
+      .eq('household_id', householdId)
+      .eq('asset_account_id', accountId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    this.holdingsSignal.set(data ?? []);
+    return this.holdingsSignal();
+  }
+
+  async loadHolding(holdingId: string): Promise<AssetHolding> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('asset_holdings')
+      .select('*')
+      .eq('household_id', householdId)
+      .eq('id', holdingId)
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  async createHolding(input: {
+    accountId: string;
+    name: string;
+    ticker?: string;
+    currency: string;
+  }): Promise<AssetHolding> {
+    const householdId = this.requireHouseholdId();
+    const userId = this.requireUserId();
+
+    const { data, error } = await this.supabase
+      .from('asset_holdings')
+      .insert({
+        household_id: householdId,
+        asset_account_id: input.accountId,
+        name: input.name,
+        ticker: input.ticker || null,
+        currency: input.currency,
+        created_by: userId,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    this.holdingsSignal.update((holdings) => [...holdings, data]);
+    return data;
+  }
+
+  async loadPositions(asOf: Date): Promise<HoldingPosition[]> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase.rpc('get_holding_positions', {
+      p_household_id: householdId,
+      p_as_of: toDateOnly(asOf),
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const positions: HoldingPosition[] = [];
+    for (const row of data ?? []) {
+      positions.push({
+        holding_id: row.holding_id,
+        holding_name: row.holding_name,
+        ticker: row.ticker,
+        asset_account_id: row.asset_account_id,
+        currency: row.currency,
+        quantity: Number(row.quantity),
+        average_cost: Number(row.average_cost),
+        invested_amount: Number(row.invested_amount),
+        latest_price: Number(row.latest_price),
+        market_value: Number(row.market_value),
+        unrealized_gain: Number(row.unrealized_gain),
+      });
+    }
+
+    this.positionsSignal.set(positions);
+    return positions;
+  }
+
+  async loadHoldingTransaction(transactionId: string): Promise<AssetTransaction> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('asset_transactions')
+      .select('*')
+      .eq('household_id', householdId)
+      .eq('id', transactionId)
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  async loadHoldingTransactions(holdingId: string): Promise<AssetTransaction[]> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('asset_transactions')
+      .select('*')
+      .eq('household_id', householdId)
+      .eq('asset_holding_id', holdingId)
+      .order('occurred_on', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return data ?? [];
+  }
+
+  async recordHoldingTransaction(input: {
+    holdingId: string;
+    type: AssetTransactionType;
+    quantity: number;
+    pricePerUnit: number;
+    fee?: number;
+    occurredOn: Date;
+    note?: string;
+  }): Promise<AssetTransaction> {
+    const householdId = this.requireHouseholdId();
+    const userId = this.requireUserId();
+
+    const { data, error } = await this.supabase
+      .from('asset_transactions')
+      .insert({
+        household_id: householdId,
+        asset_holding_id: input.holdingId,
+        type: input.type,
+        quantity: input.quantity,
+        price_per_unit: input.pricePerUnit,
+        fee: input.fee ?? 0,
+        occurred_on: toDateOnly(input.occurredOn),
+        note: input.note || null,
+        created_by: userId,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  async updateHoldingTransaction(
+    transactionId: string,
+    input: {
+      holdingId: string;
+      type: AssetTransactionType;
+      quantity: number;
+      pricePerUnit: number;
+      fee?: number;
+      occurredOn: Date;
+      note?: string;
+    },
+  ): Promise<AssetTransaction> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('asset_transactions')
+      .update({
+        asset_holding_id: input.holdingId,
+        type: input.type,
+        quantity: input.quantity,
+        price_per_unit: input.pricePerUnit,
+        fee: input.fee ?? 0,
+        occurred_on: toDateOnly(input.occurredOn),
+        note: input.note || null,
+      })
+      .eq('household_id', householdId)
+      .eq('id', transactionId)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  async deleteHoldingTransaction(transactionId: string): Promise<void> {
+    const householdId = this.requireHouseholdId();
+
+    const { error } = await this.supabase
+      .from('asset_transactions')
+      .delete()
+      .eq('household_id', householdId)
+      .eq('id', transactionId);
 
     if (error) {
       throw error;

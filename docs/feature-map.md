@@ -94,11 +94,21 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 - ✅ Editing/deleting individual valuations and archiving/unarchiving
   accounts from the UI (per-account history page with valuation list,
   edit/delete actions, and an archive toggle)
-- ⬜ `asset_transactions` for buy/sell events on investment holdings
-  (currently only whole-account manual valuations, no per-holding detail)
+- ✅ `asset_transactions` for buy/sell events on investment accounts, via a
+  new `asset_holdings` (per-instrument, e.g. a stock/ETF/fund) +
+  `asset_transactions` (buy/sell events) schema, additive to whole-account
+  manual valuations. `get_holding_positions(household_id, as_of)` derives
+  quantity, weighted-average cost, latest price, market value, and
+  unrealized gain per holding (no stored running totals; average cost is a
+  simple weighted average of buys, not FIFO/lot-based — an accepted
+  simplification for now). UI: a "Holdings" section on the investment
+  account's history page (`New holding`, per-holding position summary), a
+  dedicated holding history page listing all buy/sell transactions with
+  edit/delete, and forms to record/edit transactions
 - ✅ End-to-end (Playwright) coverage for the net worth flow: account
   creation, recording/editing/deleting valuations, liability sign handling,
-  and account archiving/unarchiving (`e2e/net-worth.spec.ts`)
+  account archiving/unarchiving, and holding buy/sell transactions with
+  position calculations (`e2e/net-worth.spec.ts`)
 
 
 ## 4. Multi-currency & rates — Stage 3/4

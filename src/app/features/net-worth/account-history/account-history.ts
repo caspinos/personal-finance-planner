@@ -7,7 +7,7 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
 
-import { AssetAccount, AssetValuation, NetWorthService } from '../../../core/net-worth/net-worth.service';
+import { AssetAccount, AssetValuation, HoldingPosition, NetWorthService } from '../../../core/net-worth/net-worth.service';
 
 @Component({
   selector: 'app-account-history',
@@ -137,6 +137,70 @@ import { AssetAccount, AssetValuation, NetWorthService } from '../../../core/net
           }
         </div>
       </div>
+
+      @if (account()?.type === 'investment') {
+        <div hlmCard>
+          <div hlmCardHeader class="flex flex-row flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 hlmCardTitle>Holdings</h2>
+              <p hlmCardDescription>Individual stocks, ETFs, or funds held in this account.</p>
+            </div>
+            <a
+              hlmBtn
+              variant="outline"
+              size="sm"
+              routerLink="/net-worth/holdings/new"
+              [queryParams]="{ accountId: accountId() }"
+            >
+              New holding
+            </a>
+          </div>
+          <div hlmCardContent>
+            @if (loading()) {
+              <div class="flex items-center gap-2 text-sm text-muted-foreground">
+                <hlm-spinner />
+                Loading holdings...
+              </div>
+            } @else if (holdings().length === 0) {
+              <p class="text-muted-foreground text-sm">No holdings recorded yet.</p>
+            } @else {
+              <ul class="flex flex-col gap-3">
+                @for (holding of holdings(); track holding.id) {
+                  <li
+                    class="border-border flex flex-col gap-3 rounded-md border p-4 md:flex-row md:items-center md:justify-between"
+                  >
+                    <div class="flex min-w-0 flex-col gap-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="font-medium">{{ holding.name }}</span>
+                        @if (holding.ticker) {
+                          <span class="text-muted-foreground text-sm">{{ holding.ticker }}</span>
+                        }
+                      </div>
+                      @if (positionFor(holding.id); as position) {
+                        <p class="text-muted-foreground text-sm">
+                          {{ position.quantity | number: '1.0-6' }} units &middot; market value
+                          {{ position.market_value | number: '1.2-2' }} {{ holding.currency }}
+                        </p>
+                      } @else {
+                        <p class="text-muted-foreground text-sm">No transactions recorded yet.</p>
+                      }
+                    </div>
+
+                    <a
+                      hlmBtn
+                      variant="outline"
+                      size="sm"
+                      [routerLink]="['/net-worth/holdings', holding.id]"
+                    >
+                      View history
+                    </a>
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        </div>
+      }
     </div>
   `,
 })
@@ -147,6 +211,8 @@ export class AccountHistory {
 
   protected readonly account = signal<AssetAccount | null>(null);
   protected readonly valuations = signal<AssetValuation[]>([]);
+  protected readonly holdings = this.netWorth.holdings;
+  protected readonly positions = signal<HoldingPosition[]>([]);
   protected readonly loading = signal(true);
   protected readonly archiving = signal(false);
   protected readonly deletingId = signal<string | null>(null);
@@ -163,6 +229,10 @@ export class AccountHistory {
       .split('_')
       .map((part) => part[0]?.toUpperCase() + part.slice(1))
       .join(' ');
+  }
+
+  protected positionFor(holdingId: string): HoldingPosition | undefined {
+    return this.positions().find((position) => position.holding_id === holdingId);
   }
 
   protected async toggleArchived(account: AssetAccount): Promise<void> {
@@ -212,6 +282,10 @@ export class AccountHistory {
       const account = await this.netWorth.loadAccount(accountId);
       this.account.set(account);
       await this.loadValuations();
+
+      if (account.type === 'investment') {
+        await this.loadHoldings();
+      }
     } catch (error) {
       this.errorMessage.set(this.extractMessage(error));
     } finally {
@@ -222,6 +296,12 @@ export class AccountHistory {
   private async loadValuations(): Promise<void> {
     const valuations = await this.netWorth.loadValuations(this.accountId());
     this.valuations.set(valuations);
+  }
+
+  private async loadHoldings(): Promise<void> {
+    await this.netWorth.loadHoldings(this.accountId());
+    const positions = await this.netWorth.loadPositions(new Date());
+    this.positions.set(positions);
   }
 
   private extractMessage(error: unknown): string {

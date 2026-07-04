@@ -68,3 +68,58 @@ export async function expectTotalNetWorth(page: Page, expectedTotal: string): Pr
   const card = page.locator('[hlmCard]').filter({ hasText: 'Total net worth' });
   await expect(card.getByText(expectedTotal, { exact: true })).toBeVisible();
 }
+
+/** Creates a holding from an account history page, waiting to land back on it. */
+export async function createHolding(
+  page: Page,
+  options: { name: string; ticker?: string; currency?: string }
+): Promise<void> {
+  await page.getByRole('link', { name: 'New holding' }).click();
+  await expect(page).toHaveURL(/\/net-worth\/holdings\/new\?accountId=.+/);
+  await page.getByLabel('Name').fill(options.name);
+
+  if (options.ticker) {
+    await page.getByLabel('Ticker (optional)').fill(options.ticker);
+  }
+
+  if (options.currency) {
+    await page.getByLabel('Currency').fill(options.currency);
+  }
+
+  await page.getByRole('button', { name: 'Create holding' }).click();
+  await expect(page).toHaveURL(/\/net-worth\/accounts\/.+/);
+  await expect(page.getByText(options.name)).toBeVisible();
+}
+
+/** Records a buy/sell transaction from a holding's history page, landing back on it. */
+export async function recordHoldingTransaction(
+  page: Page,
+  options: {
+    type?: 'Buy' | 'Sell';
+    quantity: string;
+    pricePerUnit: string;
+    fee?: string;
+    note?: string;
+  }
+): Promise<void> {
+  await page.getByRole('link', { name: 'Record transaction' }).click();
+  await expect(page).toHaveURL(/\/net-worth\/holdings\/transactions\/new\?holdingId=.+/);
+
+  if (options.type === 'Sell') {
+    await page.getByRole('button', { name: 'Sell' }).click();
+  }
+
+  await page.getByLabel('Quantity').fill(options.quantity);
+  await page.getByLabel('Price per unit').fill(options.pricePerUnit);
+
+  if (options.fee) {
+    await page.getByLabel('Fee (optional)').fill(options.fee);
+  }
+
+  if (options.note) {
+    await page.getByLabel('Note (optional)').fill(options.note);
+  }
+
+  await page.getByRole('button', { name: 'Save transaction' }).click();
+  await expect(page).toHaveURL(/\/net-worth\/holdings\/.+/);
+}
