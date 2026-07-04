@@ -34,8 +34,8 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 - ✅ `HouseholdService` (load households, track/persist current household),
   `householdGuard`
 - ✅ Create-household page (first-run flow when a user has no household yet)
-- ✅ Authenticated app shell (header with user email + sign out) and a
-  placeholder dashboard route
+- ✅ Authenticated app shell (header with user email, nav links, and sign out)
+  and a dashboard with a link into the budget
 - ⬜ Inviting other users to a household / managing member roles from the UI
   (schema supports it; no UI or invite flow yet)
 - ⬜ Switching between multiple households in the UI (service supports
@@ -45,16 +45,26 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 
 ## 2. Household budget (envelopes) — Stage 2
 
-All ⬜ not started:
-
-- ⬜ `envelopes` table (name, household, ordering, etc.)
-- ⬜ `budget_transactions` (expenses, income/top-ups) as immutable events
-- ⬜ `envelope_transfers` between envelopes
-- ⬜ Monthly budget view with cumulative balances (including carried-over
-  negative balances)
+- ✅ `envelopes` table (name, household, archived flag) with RLS
+  (`owner`/`editor` write, all members read)
+- ✅ `budget_transactions` (expense/income events) and `envelope_transfers`
+  as immutable events, with RLS + grants
+- ✅ `get_envelope_balances(household_id, as_of)` SQL function derives
+  cumulative balances dynamically (no stored running totals), so
+  surpluses/deficits naturally carry over between months
+- ✅ `BudgetService` (Angular): load envelopes, load balances, create
+  envelope, record transaction, transfer between envelopes
+- ✅ Budget UI: envelope list with per-month balances, month switcher,
+  "New envelope", "Record transaction" (expense/income toggle), "Transfer"
+  forms — all built with spartan/ui (`select`, `toggle-group`, `field`, etc.)
+- ✅ End-to-end verified in-browser: create envelopes, record a transaction,
+  transfer between envelopes, balances carry over to the next month
+- ⬜ Editing/deleting individual transactions or transfers from the UI
+  (DB policies allow it; no UI yet)
+- ⬜ Archiving/unarchiving envelopes from the UI (`setEnvelopeArchived`
+  exists on the service; no UI control yet)
 - ⬜ Recurring transactions
-- ⬜ Budget UI (envelope list, add/edit envelope, record expense/top-up,
-  transfer funds)
+- ⬜ Per-envelope transaction history view
 
 ## 3. Net worth & investments — Stage 3
 

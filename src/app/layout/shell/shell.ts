@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { Router, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterOutlet } from '@angular/router';
 
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 
@@ -7,11 +7,15 @@ import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, HlmButtonImports],
+  imports: [RouterOutlet, RouterLink, HlmButtonImports],
   template: `
     <div class="bg-background text-foreground flex min-h-svh flex-col">
       <header class="border-border flex items-center gap-4 border-b px-6 py-3">
         <span class="font-semibold">Personal Finance Planner</span>
+        <nav class="flex gap-2">
+          <a hlmBtn variant="ghost" size="sm" routerLink="/">Dashboard</a>
+          <a hlmBtn variant="ghost" size="sm" routerLink="/budget">Budget</a>
+        </nav>
         @if (auth.user(); as user) {
           <span class="text-muted-foreground ml-auto text-sm">{{ user.email }}</span>
         }

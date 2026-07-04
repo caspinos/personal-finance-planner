@@ -29,6 +29,27 @@ export const routes: Routes = [
         path: '',
         loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.Dashboard),
       },
+      {
+        path: 'budget',
+        loadComponent: () => import('./features/budget/budget').then((m) => m.Budget),
+      },
+      {
+        path: 'budget/envelopes/new',
+        loadComponent: () =>
+          import('./features/budget/envelope-form/envelope-form').then((m) => m.EnvelopeForm),
+      },
+      {
+        path: 'budget/transactions/new',
+        loadComponent: () =>
+          import('./features/budget/transaction-form/transaction-form').then(
+            (m) => m.TransactionForm
+          ),
+      },
+      {
+        path: 'budget/transfers/new',
+        loadComponent: () =>
+          import('./features/budget/transfer-form/transfer-form').then((m) => m.TransferForm),
+      },
     ],
   },
 ];
