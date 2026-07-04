@@ -69,16 +69,29 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 
 ## 3. Net worth & investments — Stage 3
 
-All ⬜ not started:
+- ✅ `asset_accounts` table (bank, investment, cash, real estate, vehicle,
+  precious metals, currency, other asset, liability types; liquidity class;
+  institution/category/owner metadata; archived flag) with RLS
+  (`owner`/`editor` write, all members read)
+- ✅ `asset_valuations` — manual dated valuation snapshots per account
+  (`value`, `contribution_amount` to distinguish contribution vs.
+  market/FX movement, optional note), immutable event-style rows with RLS
+- ✅ `get_net_worth_summary(household_id, as_of)` SQL function derives each
+  account's latest valuation as of a date and signs liabilities negative
+  (no stored running totals)
+- ✅ `NetWorthService` (Angular): load accounts, load summary, create
+  account, record valuation
+- ✅ Net worth UI: total net worth card, per-account cards with latest
+  valuation, "New account" and "Add valuation" forms, wired into routing
+  and shell/dashboard navigation — all built with spartan/ui
+- ⬜ Asset classification is captured in the schema/forms but not yet
+  surfaced as filters/grouping in the summary UI
+- ⬜ Editing/deleting individual valuations or archiving accounts from the
+  UI (schema supports it; no UI control yet)
+- ⬜ `asset_transactions` for buy/sell events on investment holdings
+  (currently only whole-account manual valuations, no per-holding detail)
+- ⬜ End-to-end (Playwright) coverage for the net worth flow
 
-- ⬜ `assets` / `asset_accounts` (bank, investment, funds, stocks/ETFs/bonds,
-  currencies, precious metals, real estate, vehicles, other, liabilities)
-- ⬜ `asset_transactions` (deposits/withdrawals, buys/sells)
-- ⬜ `asset_valuations` (manual valuation snapshots, distinguishing
-  contribution vs. market/FX movement)
-- ⬜ Asset classification (type, liquidity, owner, currency, institution,
-  category)
-- ⬜ Net worth summary UI
 
 ## 4. Multi-currency & rates — Stage 3/4
 

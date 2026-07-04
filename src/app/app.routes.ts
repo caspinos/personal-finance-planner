@@ -69,6 +69,22 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/budget/transfer-form/transfer-form').then((m) => m.TransferForm),
       },
+      {
+        path: 'net-worth',
+        loadComponent: () => import('./features/net-worth/net-worth').then((m) => m.NetWorth),
+      },
+      {
+        path: 'net-worth/accounts/new',
+        loadComponent: () =>
+          import('./features/net-worth/account-form/account-form').then((m) => m.AccountForm),
+      },
+      {
+        path: 'net-worth/valuations/new',
+        loadComponent: () =>
+          import('./features/net-worth/valuation-form/valuation-form').then(
+            (m) => m.ValuationForm,
+          ),
+      },
     ],
   },
 ];

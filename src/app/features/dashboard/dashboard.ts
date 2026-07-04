@@ -17,10 +17,11 @@ import { HouseholdService } from '../../core/household/household.service';
             households.currentHousehold()?.name ? ', ' + households.currentHousehold()!.name : ''
           }}
         </h1>
-        <p hlmCardDescription>Budget envelopes and net worth tracking will show up here soon.</p>
+        <p hlmCardDescription>Track your budget envelopes and net worth here.</p>
       </div>
-      <div hlmCardFooter>
+      <div hlmCardFooter class="flex gap-2">
         <a hlmBtn size="sm" routerLink="/budget">Go to budget</a>
+        <a hlmBtn variant="outline" size="sm" routerLink="/net-worth">Go to net worth</a>
       </div>
     </div>
   `,
