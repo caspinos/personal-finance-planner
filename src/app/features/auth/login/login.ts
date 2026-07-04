@@ -2,62 +2,83 @@ import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 
+import { HlmAlertImports } from '@spartan-ng/helm/alert';
+import { HlmButtonImports } from '@spartan-ng/helm/button';
+import { HlmCardImports } from '@spartan-ng/helm/card';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmInputImports } from '@spartan-ng/helm/input';
+import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+
 import { AuthService } from '../../../core/auth/auth.service';
 
 @Component({
   selector: 'app-login',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    HlmCardImports,
+    HlmFieldImports,
+    HlmInputImports,
+    HlmButtonImports,
+    HlmAlertImports,
+    HlmSpinnerImports,
+  ],
   template: `
-    <section class="auth-page">
-      <h1>Log in</h1>
-
-      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-        <div class="field">
-          <label for="email">Email</label>
-          <input id="email" type="email" formControlName="email" autocomplete="email" />
+    <div class="flex min-h-svh items-center justify-center p-6">
+      <div hlmCard class="w-full max-w-sm">
+        <div hlmCardHeader>
+          <h1 hlmCardTitle>Log in</h1>
+          <p hlmCardDescription>Welcome back to Personal Finance Planner.</p>
         </div>
 
-        <div class="field">
-          <label for="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            formControlName="password"
-            autocomplete="current-password"
-          />
+        <div hlmCardContent>
+          <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="flex flex-col gap-4">
+            <div hlmField>
+              <label hlmFieldLabel for="email">Email</label>
+              <input hlmInput id="email" type="email" formControlName="email" autocomplete="email" />
+              @if (form.controls.email.invalid && form.controls.email.touched) {
+                <hlm-field-error forceShow>Enter a valid email address.</hlm-field-error>
+              }
+            </div>
+
+            <div hlmField>
+              <label hlmFieldLabel for="password">Password</label>
+              <input
+                hlmInput
+                id="password"
+                type="password"
+                formControlName="password"
+                autocomplete="current-password"
+              />
+              @if (form.controls.password.invalid && form.controls.password.touched) {
+                <hlm-field-error forceShow>Password must be at least 6 characters.</hlm-field-error>
+              }
+            </div>
+
+            @if (errorMessage()) {
+              <div hlmAlert variant="destructive">
+                <p hlmAlertTitle>Couldn't log in</p>
+                <p hlmAlertDescription>{{ errorMessage() }}</p>
+              </div>
+            }
+
+            <button hlmBtn type="submit" [disabled]="form.invalid || submitting()">
+              @if (submitting()) {
+                <hlm-spinner />
+              }
+              {{ submitting() ? 'Logging in…' : 'Log in' }}
+            </button>
+          </form>
         </div>
 
-        @if (errorMessage()) {
-          <p class="error" role="alert">{{ errorMessage() }}</p>
-        }
-
-        <button type="submit" [disabled]="form.invalid || submitting()">
-          {{ submitting() ? 'Logging in…' : 'Log in' }}
-        </button>
-      </form>
-
-      <p>No account yet? <a routerLink="/register">Register</a></p>
-    </section>
-  `,
-  styles: `
-    .auth-page {
-      max-width: 24rem;
-      margin: 4rem auto;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-      margin-bottom: 1rem;
-    }
-
-    .error {
-      color: #b3261e;
-    }
+        <div hlmCardFooter class="justify-center">
+          <p class="text-muted-foreground text-sm">
+            No account yet?
+            <a routerLink="/register" class="text-primary underline underline-offset-4">Register</a>
+          </p>
+        </div>
+      </div>
+    </div>
   `,
 })
 export class Login {

@@ -2,68 +2,90 @@ import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
+import { HlmAlertImports } from '@spartan-ng/helm/alert';
+import { HlmButtonImports } from '@spartan-ng/helm/button';
+import { HlmCardImports } from '@spartan-ng/helm/card';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmInputImports } from '@spartan-ng/helm/input';
+import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+
 import { AuthService } from '../../../core/auth/auth.service';
 
 @Component({
   selector: 'app-register',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    HlmCardImports,
+    HlmFieldImports,
+    HlmInputImports,
+    HlmButtonImports,
+    HlmAlertImports,
+    HlmSpinnerImports,
+  ],
   template: `
-    <section class="auth-page">
-      <h1>Create an account</h1>
+    <div class="flex min-h-svh items-center justify-center p-6">
+      <div hlmCard class="w-full max-w-sm">
+        <div hlmCardHeader>
+          <h1 hlmCardTitle>Create an account</h1>
+          <p hlmCardDescription>Start tracking your budget and net worth.</p>
+        </div>
 
-      @if (registered()) {
-        <p role="status">
-          Almost done! Check your email to confirm your account, then log in.
-        </p>
-      } @else {
-        <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-          <div class="field">
-            <label for="email">Email</label>
-            <input id="email" type="email" formControlName="email" autocomplete="email" />
-          </div>
+        <div hlmCardContent>
+          @if (registered()) {
+            <div hlmAlert>
+              <p hlmAlertTitle>Almost done!</p>
+              <p hlmAlertDescription>Check your email to confirm your account, then log in.</p>
+            </div>
+          } @else {
+            <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="flex flex-col gap-4">
+              <div hlmField>
+                <label hlmFieldLabel for="email">Email</label>
+                <input hlmInput id="email" type="email" formControlName="email" autocomplete="email" />
+                @if (form.controls.email.invalid && form.controls.email.touched) {
+                  <hlm-field-error forceShow>Enter a valid email address.</hlm-field-error>
+                }
+              </div>
 
-          <div class="field">
-            <label for="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              formControlName="password"
-              autocomplete="new-password"
-            />
-          </div>
+              <div hlmField>
+                <label hlmFieldLabel for="password">Password</label>
+                <input
+                  hlmInput
+                  id="password"
+                  type="password"
+                  formControlName="password"
+                  autocomplete="new-password"
+                />
+                @if (form.controls.password.invalid && form.controls.password.touched) {
+                  <hlm-field-error forceShow>Password must be at least 6 characters.</hlm-field-error>
+                }
+              </div>
 
-          @if (errorMessage()) {
-            <p class="error" role="alert">{{ errorMessage() }}</p>
+              @if (errorMessage()) {
+                <div hlmAlert variant="destructive">
+                  <p hlmAlertTitle>Couldn't create your account</p>
+                  <p hlmAlertDescription>{{ errorMessage() }}</p>
+                </div>
+              }
+
+              <button hlmBtn type="submit" [disabled]="form.invalid || submitting()">
+                @if (submitting()) {
+                  <hlm-spinner />
+                }
+                {{ submitting() ? 'Creating account…' : 'Create account' }}
+              </button>
+            </form>
           }
+        </div>
 
-          <button type="submit" [disabled]="form.invalid || submitting()">
-            {{ submitting() ? 'Creating account…' : 'Create account' }}
-          </button>
-        </form>
-      }
-
-      <p>Already have an account? <a routerLink="/login">Log in</a></p>
-    </section>
-  `,
-  styles: `
-    .auth-page {
-      max-width: 24rem;
-      margin: 4rem auto;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-      margin-bottom: 1rem;
-    }
-
-    .error {
-      color: #b3261e;
-    }
+        <div hlmCardFooter class="justify-center">
+          <p class="text-muted-foreground text-sm">
+            Already have an account?
+            <a routerLink="/login" class="text-primary underline underline-offset-4">Log in</a>
+          </p>
+        </div>
+      </div>
+    </div>
   `,
 })
 export class Register {

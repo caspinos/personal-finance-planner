@@ -2,51 +2,63 @@ import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 
+import { HlmAlertImports } from '@spartan-ng/helm/alert';
+import { HlmButtonImports } from '@spartan-ng/helm/button';
+import { HlmCardImports } from '@spartan-ng/helm/card';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmInputImports } from '@spartan-ng/helm/input';
+import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+
 import { HouseholdService } from '../../../core/household/household.service';
 
 @Component({
   selector: 'app-create-household',
-  imports: [ReactiveFormsModule],
+  imports: [
+    ReactiveFormsModule,
+    HlmCardImports,
+    HlmFieldImports,
+    HlmInputImports,
+    HlmButtonImports,
+    HlmAlertImports,
+    HlmSpinnerImports,
+  ],
   template: `
-    <section class="create-household-page">
-      <h1>Create your household</h1>
-      <p>A household groups your budget and net worth data and can be shared with others later.</p>
-
-      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-        <div class="field">
-          <label for="name">Household name</label>
-          <input id="name" type="text" formControlName="name" autocomplete="off" />
+    <div class="flex min-h-svh items-center justify-center p-6">
+      <div hlmCard class="w-full max-w-sm">
+        <div hlmCardHeader>
+          <h1 hlmCardTitle>Create your household</h1>
+          <p hlmCardDescription>
+            A household groups your budget and net worth data and can be shared with others later.
+          </p>
         </div>
 
-        @if (errorMessage()) {
-          <p class="error" role="alert">{{ errorMessage() }}</p>
-        }
+        <div hlmCardContent>
+          <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="flex flex-col gap-4">
+            <div hlmField>
+              <label hlmFieldLabel for="name">Household name</label>
+              <input hlmInput id="name" type="text" formControlName="name" autocomplete="off" />
+              @if (form.controls.name.invalid && form.controls.name.touched) {
+                <hlm-field-error forceShow>Enter at least 2 characters.</hlm-field-error>
+              }
+            </div>
 
-        <button type="submit" [disabled]="form.invalid || submitting()">
-          {{ submitting() ? 'Creating…' : 'Create household' }}
-        </button>
-      </form>
-    </section>
-  `,
-  styles: `
-    .create-household-page {
-      max-width: 24rem;
-      margin: 4rem auto;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
+            @if (errorMessage()) {
+              <div hlmAlert variant="destructive">
+                <p hlmAlertTitle>Couldn't create the household</p>
+                <p hlmAlertDescription>{{ errorMessage() }}</p>
+              </div>
+            }
 
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-      margin-bottom: 1rem;
-    }
-
-    .error {
-      color: #b3261e;
-    }
+            <button hlmBtn type="submit" [disabled]="form.invalid || submitting()">
+              @if (submitting()) {
+                <hlm-spinner />
+              }
+              {{ submitting() ? 'Creating…' : 'Create household' }}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
   `,
 })
 export class CreateHousehold {
