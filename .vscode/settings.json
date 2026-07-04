@@ -4,6 +4,7 @@
         "npx supabase": true,
         "npx ng": true,
         "Test-Path": true,
-        "git add": true
+        "git add": true,
+        "npx playwright": true
     }
 }

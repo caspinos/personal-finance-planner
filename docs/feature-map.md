@@ -94,7 +94,9 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   edit/delete actions, and an archive toggle)
 - ⬜ `asset_transactions` for buy/sell events on investment holdings
   (currently only whole-account manual valuations, no per-holding detail)
-- ⬜ End-to-end (Playwright) coverage for the net worth flow
+- ✅ End-to-end (Playwright) coverage for the net worth flow: account
+  creation, recording/editing/deleting valuations, liability sign handling,
+  and account archiving/unarchiving (`e2e/net-worth.spec.ts`)
 
 
 ## 4. Multi-currency & rates — Stage 3/4
@@ -134,5 +136,9 @@ All ⬜ not started:
   (`e2e/budget.spec.ts`, run with `npm run e2e`; requires
   `npx supabase start` first). Not yet wired into CI (needs a Docker-capable
   runner for the local Supabase stack).
+- ✅ E2E test coverage for the net worth flow (Playwright): account
+  creation, recording/editing/deleting valuations, liability sign handling,
+  and account archiving/unarchiving (`e2e/net-worth.spec.ts`, same
+  requirements as above).
 - ⬜ Accessibility audit (AXE) pass over implemented screens
 - ⬜ Audit log for key operations (`AuditLog` table from the domain model)
