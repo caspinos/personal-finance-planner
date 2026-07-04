@@ -12,6 +12,7 @@ This is **Personal Finance Planner** — a web app for tracking expenses, envelo
 - **Multi-currency:** required from the start — transactional currencies, a base currency for analysis, and historical exchange rates
 - **Core domains:** budget envelopes (income allocation, expenses, transfers, recurring transactions) and assets/net worth (accounts, holdings, valuations, liabilities)
 - Full project background, domain model, and roadmap: see [docs/project-assumptions-and-plan.md](docs/project-assumptions-and-plan.md) (canonical, English) — [docs/zalozenia-i-plan.md](docs/zalozenia-i-plan.md) is the original Polish draft, kept temporarily for reference only.
+- Current implementation status (what's done vs. still to build): see [docs/feature-map.md](docs/feature-map.md) — keep it up to date as features land.
 
 ### Documentation Language
 
