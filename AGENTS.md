@@ -18,6 +18,31 @@ This is **Personal Finance Planner** — a web app for tracking expenses, envelo
 - All project documentation (in `docs/` and elsewhere) MUST be written in **English** going forward.
 - Code comments, commit messages, and identifiers must also be in English.
 
+## UI Library: spartan/ui
+
+The app uses [spartan/ui](https://www.spartan.ng) for UI components. It has a two-layer architecture:
+
+- **Brain** (`@spartan-ng/brain/<name>`) — unstyled, accessible primitives installed from npm. Never edit it.
+- **Helm** (`@spartan-ng/helm/<name>`) — Tailwind-styled components, **copied into this repo** by the CLI so we own and can customize them.
+
+Project-specific config (see `components.json`):
+
+- Components path: `src/app/ui` (Helm code lives here, not `libs/ui` — this is a plain Angular CLI app, not an Nx monorepo)
+- Import alias: `@spartan-ng/helm`
+- Theme style: `nova`
+- Already installed: `button`, `input`, `label`, `field`, `card`, `alert`, `spinner`, `separator`, `utils`
+
+### Conventions
+
+- **Prefer existing spartan components over hand-written markup.** Build forms, dialogs, and layout from Helm + Brain pieces (e.g. `hlmBtn`, `hlmInput`, `hlmField`, `hlmCard*`) instead of raw `<div>`/`<input>` styling.
+- **Use built-in `variant`/`size` inputs** instead of overriding classes (e.g. `<button hlmBtn variant="destructive" size="sm">`).
+- **Use semantic color tokens only** (`bg-primary`, `text-muted-foreground`, `border-border`, etc.), never raw Tailwind palette colors like `bg-blue-500`.
+- **Layout spacing:** use `gap-*` with flex/grid, not `space-x-*`/`space-y-*`. Use `size-*` when width equals height.
+- **Forms:** wrap each control in `hlmField` (label, control, description, error) rather than plain `<div>`s; see `hlmFieldSet`/`hlmFieldLegend` for grouped controls.
+- **Adding a new component:** `ng g @spartan-ng/cli:ui --name=<component>` (see `availableComponents` via `ng g @spartan-ng/cli:info --json`). Do not hand-roll a component that already exists in the catalog.
+- **After upgrading `@spartan-ng/*` packages:** run `ng g @spartan-ng/cli:healthcheck --autoFix`.
+- Full guidance (styling, forms, composition, icons, Brain vs. Helm, CLI reference) lives in the local `spartan` skill at `.agents/skills/spartan/`.
+
 ## TypeScript Best Practices
 
 - Use strict type checking
