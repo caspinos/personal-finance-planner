@@ -110,6 +110,11 @@ All ⬜ not started:
 
 - ✅ RLS-based multi-tenancy isolation for households/household_members
 - ✅ CI runs build + unit tests on every push
+- ✅ E2E test coverage for the budget flow (Playwright): register/login,
+  household creation, envelope creation, expense/income transactions,
+  envelope transfers, and month-to-month balance carryover
+  (`e2e/budget.spec.ts`, run with `npm run e2e`; requires
+  `npx supabase start` first). Not yet wired into CI (needs a Docker-capable
+  runner for the local Supabase stack).
 - ⬜ Accessibility audit (AXE) pass over implemented screens
-- ⬜ E2E test coverage (only a minimal unit test exists today)
 - ⬜ Audit log for key operations (`AuditLog` table from the domain model)
