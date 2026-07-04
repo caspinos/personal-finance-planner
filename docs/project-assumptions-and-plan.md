@@ -93,6 +93,16 @@ The system must support:
 
 Initially the interface can be limited to a single household, but the data model must support the possibility of having multiple households in the future.
 
+#### Future Feature: Invite-Only Access
+
+Currently anyone can self-register via the public registration page. As a
+future enhancement:
+
+- allow an administrator/owner to disable public self-registration,
+- add a user invite flow (e.g. invite by email, with a token/link to accept),
+  so new users and household members can only join via an invitation once
+  self-registration is disabled.
+
 ---
 
 ### 3.2. Household Budget
