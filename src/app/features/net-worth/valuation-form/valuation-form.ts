@@ -35,10 +35,8 @@ function toDateInputValue(date: Date): string {
     <div class="flex min-h-svh items-center justify-center p-6">
       <div hlmCard class="w-full max-w-lg">
         <div hlmCardHeader>
-          <h1 hlmCardTitle>Add valuation</h1>
-          <p hlmCardDescription>
-            Record a dated snapshot of an account's value to update net worth.
-          </p>
+          <h1 hlmCardTitle>{{ title() }}</h1>
+          <p hlmCardDescription>{{ description() }}</p>
         </div>
 
         <div hlmCardContent>
@@ -126,7 +124,7 @@ function toDateInputValue(date: Date): string {
                 @if (submitting()) {
                   <hlm-spinner />
                 }
-                {{ submitting() ? 'Saving...' : 'Save valuation' }}
+                {{ submitting() ? 'Saving...' : submitLabel() }}
               </button>
             </form>
           }
@@ -152,6 +150,17 @@ export class ValuationForm {
   protected readonly submitting = signal(false);
   protected readonly submitted = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
+  protected readonly valuationId = signal<string | null>(this.route.snapshot.paramMap.get('id'));
+  protected readonly isEditing = computed(() => this.valuationId() !== null);
+  protected readonly title = computed(() => (this.isEditing() ? 'Edit valuation' : 'Add valuation'));
+  protected readonly description = computed(() =>
+    this.isEditing()
+      ? "Update this dated snapshot of an account's value."
+      : "Record a dated snapshot of an account's value to update net worth.",
+  );
+  protected readonly submitLabel = computed(() =>
+    this.isEditing() ? 'Save changes' : 'Save valuation',
+  );
 
   protected readonly accountToString = (id: string): string =>
     this.accounts().find((account) => account.id === id)?.name ?? '';
@@ -185,15 +194,22 @@ export class ValuationForm {
 
     try {
       const { value, valuedOn, contributionAmount, note } = this.form.getRawValue();
-      await this.netWorth.recordValuation({
+      const input = {
         accountId: this.accountId()!,
         valuedOn: new Date(valuedOn),
         value,
         currency: this.currency(),
         contributionAmount,
         note,
-      });
-      await this.router.navigateByUrl('/net-worth');
+      };
+
+      if (this.valuationId()) {
+        await this.netWorth.updateValuation(this.valuationId()!, input);
+      } else {
+        await this.netWorth.recordValuation(input);
+      }
+
+      await this.router.navigateByUrl(`/net-worth/accounts/${this.accountId()}`);
     } catch (error) {
       this.errorMessage.set(this.extractMessage(error));
     } finally {
@@ -207,6 +223,17 @@ export class ValuationForm {
 
     try {
       await this.netWorth.loadAccounts();
+
+      if (this.valuationId()) {
+        const valuation = await this.netWorth.loadValuation(this.valuationId()!);
+        this.accountId.set(valuation.asset_account_id);
+        this.form.patchValue({
+          value: Number(valuation.value),
+          valuedOn: valuation.valued_on,
+          contributionAmount: Number(valuation.contribution_amount),
+          note: valuation.note ?? '',
+        });
+      }
     } catch (error) {
       this.errorMessage.set(this.extractMessage(error));
     } finally {

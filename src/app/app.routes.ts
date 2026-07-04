@@ -79,7 +79,21 @@ export const routes: Routes = [
           import('./features/net-worth/account-form/account-form').then((m) => m.AccountForm),
       },
       {
+        path: 'net-worth/accounts/:id',
+        loadComponent: () =>
+          import('./features/net-worth/account-history/account-history').then(
+            (m) => m.AccountHistory,
+          ),
+      },
+      {
         path: 'net-worth/valuations/new',
+        loadComponent: () =>
+          import('./features/net-worth/valuation-form/valuation-form').then(
+            (m) => m.ValuationForm,
+          ),
+      },
+      {
+        path: 'net-worth/valuations/:id/edit',
         loadComponent: () =>
           import('./features/net-worth/valuation-form/valuation-form').then(
             (m) => m.ValuationForm,

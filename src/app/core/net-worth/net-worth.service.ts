@@ -126,6 +126,38 @@ export class NetWorthService {
     return summary;
   }
 
+  async loadAccount(accountId: string): Promise<AssetAccount> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('asset_accounts')
+      .select('*')
+      .eq('household_id', householdId)
+      .eq('id', accountId)
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  async setAccountArchived(accountId: string, archived: boolean): Promise<void> {
+    const { error } = await this.supabase
+      .from('asset_accounts')
+      .update({ archived })
+      .eq('id', accountId);
+
+    if (error) {
+      throw error;
+    }
+
+    this.accountsSignal.update((accounts) =>
+      accounts.map((account) => (account.id === accountId ? { ...account, archived } : account)),
+    );
+  }
+
   async createAccount(input: {
     name: string;
     type: AssetAccountType;
@@ -193,6 +225,90 @@ export class NetWorthService {
     }
 
     return data;
+  }
+
+  async loadValuation(valuationId: string): Promise<AssetValuation> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('asset_valuations')
+      .select('*')
+      .eq('household_id', householdId)
+      .eq('id', valuationId)
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  async loadValuations(accountId: string): Promise<AssetValuation[]> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('asset_valuations')
+      .select('*')
+      .eq('household_id', householdId)
+      .eq('asset_account_id', accountId)
+      .order('valued_on', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return data ?? [];
+  }
+
+  async updateValuation(
+    valuationId: string,
+    input: {
+      accountId: string;
+      valuedOn: Date;
+      value: number;
+      currency: string;
+      contributionAmount?: number;
+      note?: string;
+    },
+  ): Promise<AssetValuation> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('asset_valuations')
+      .update({
+        asset_account_id: input.accountId,
+        valued_on: toDateOnly(input.valuedOn),
+        value: input.value,
+        currency: input.currency,
+        contribution_amount: input.contributionAmount ?? 0,
+        note: input.note || null,
+      })
+      .eq('household_id', householdId)
+      .eq('id', valuationId)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  async deleteValuation(valuationId: string): Promise<void> {
+    const householdId = this.requireHouseholdId();
+
+    const { error } = await this.supabase
+      .from('asset_valuations')
+      .delete()
+      .eq('household_id', householdId)
+      .eq('id', valuationId);
+
+    if (error) {
+      throw error;
+    }
   }
 
   private requireHouseholdId(): string {

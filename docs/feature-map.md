@@ -42,6 +42,9 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   tracking a "current household", but only one can currently be created per
   user in practice, and there's no household switcher UI)
 - ⬜ Audit log for membership/role changes
+- ⬜ Ability to disable public self-registration and invite users instead
+  (e.g. admin/owner-issued email invites with a token/link to accept); today
+  anyone can sign up via the public Register page
 
 ## 2. Household budget (envelopes) — Stage 2
 
@@ -86,8 +89,9 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   and shell/dashboard navigation — all built with spartan/ui
 - ⬜ Asset classification is captured in the schema/forms but not yet
   surfaced as filters/grouping in the summary UI
-- ⬜ Editing/deleting individual valuations or archiving accounts from the
-  UI (schema supports it; no UI control yet)
+- ✅ Editing/deleting individual valuations and archiving/unarchiving
+  accounts from the UI (per-account history page with valuation list,
+  edit/delete actions, and an archive toggle)
 - ⬜ `asset_transactions` for buy/sell events on investment holdings
   (currently only whole-account manual valuations, no per-holding detail)
 - ⬜ End-to-end (Playwright) coverage for the net worth flow

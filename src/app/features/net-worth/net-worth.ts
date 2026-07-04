@@ -100,7 +100,10 @@ import { NetWorthService, NetWorthSummaryRow } from '../../core/net-worth/net-wo
                   }
                 </p>
               </div>
-              <div hlmCardFooter>
+              <div hlmCardFooter class="flex flex-wrap gap-2">
+                <a hlmBtn variant="outline" size="sm" [routerLink]="['/net-worth/accounts', row.account_id]">
+                  View history
+                </a>
                 <a
                   hlmBtn
                   variant="outline"
