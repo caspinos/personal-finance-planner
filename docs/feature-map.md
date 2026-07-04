@@ -87,8 +87,10 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 - ✅ Net worth UI: total net worth card, per-account cards with latest
   valuation, "New account" and "Add valuation" forms, wired into routing
   and shell/dashboard navigation — all built with spartan/ui
-- ⬜ Asset classification is captured in the schema/forms but not yet
-  surfaced as filters/grouping in the summary UI
+- ✅ Asset classification (type, liquidity, category) surfaced in the net
+  worth summary UI: accounts are grouped by type with per-group subtotals,
+  and a liquidity filter narrows the view
+  (`get_net_worth_summary` now returns `liquidity`/`category`)
 - ✅ Editing/deleting individual valuations and archiving/unarchiving
   accounts from the UI (per-account history page with valuation list,
   edit/delete actions, and an archive toggle)

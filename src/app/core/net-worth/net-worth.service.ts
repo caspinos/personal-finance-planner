@@ -49,6 +49,8 @@ export interface NetWorthSummaryRow {
   account_id: string;
   account_name: string;
   account_type: AssetAccountType;
+  liquidity: AssetLiquidityClass;
+  category: string | null;
   currency: string;
   valuation_id: string | null;
   valued_on: string | null;
@@ -114,6 +116,8 @@ export class NetWorthService {
         account_id: row.account_id,
         account_name: row.account_name,
         account_type: row.account_type,
+        liquidity: row.liquidity,
+        category: row.category,
         currency: row.currency,
         valuation_id: row.valuation_id,
         valued_on: row.valued_on,

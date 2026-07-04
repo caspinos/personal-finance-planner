@@ -65,5 +65,6 @@ export async function expectAccountValue(
 
 /** Asserts the displayed total net worth figure on the net worth page. */
 export async function expectTotalNetWorth(page: Page, expectedTotal: string): Promise<void> {
-  await expect(page.getByText(expectedTotal, { exact: true })).toBeVisible();
+  const card = page.locator('[hlmCard]').filter({ hasText: 'Total net worth' });
+  await expect(card.getByText(expectedTotal, { exact: true })).toBeVisible();
 }

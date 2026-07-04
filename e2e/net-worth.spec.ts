@@ -39,6 +39,30 @@ test.describe('Net worth', () => {
     await expectTotalNetWorth(page, '300.00');
   });
 
+  test('groups accounts by type and filters by liquidity', async ({ page }) => {
+    await createAccount(page, { name: 'Checking account' });
+    await addValuationFromAccountCard(page, { account: 'Checking account', value: '500' });
+    await page.getByRole('link', { name: 'Back to net worth' }).click();
+
+    await createAccount(page, { name: 'Credit card', type: 'Liability' });
+    await addValuationFromAccountCard(page, { account: 'Credit card', value: '200' });
+    await page.getByRole('link', { name: 'Back to net worth' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Bank', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Liability', exact: true })).toBeVisible();
+
+    await page.getByRole('combobox', { name: 'Filter by liquidity' }).click();
+    await page.getByRole('option', { name: 'Liability', exact: true }).click();
+
+    await expect(page.getByRole('heading', { name: 'Liability', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Bank', exact: true })).not.toBeVisible();
+    await expect(page.getByText('Credit card')).toBeVisible();
+    await expect(page.getByText('Checking account')).not.toBeVisible();
+
+    await page.getByRole('button', { name: 'Clear filter' }).click();
+    await expect(page.getByRole('heading', { name: 'Bank', exact: true })).toBeVisible();
+  });
+
   test('shows account history and edits and deletes a valuation', async ({ page }) => {
     await createAccount(page, { name: 'Checking account' });
     await addValuationFromAccountCard(page, {
