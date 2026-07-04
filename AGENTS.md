@@ -1,6 +1,23 @@
 
 You are an expert in TypeScript, Angular, and scalable web application development. You write functional, maintainable, performant, and accessible code following Angular and TypeScript best practices.
 
+## Project Context
+
+This is **Personal Finance Planner** — a web app for tracking expenses, envelope-style household budgeting, and net worth/investment tracking, with data sharing across household members.
+
+- **Frontend:** Angular (standalone components, signals) + TypeScript
+- **Backend:** Supabase (Postgres, Auth, Storage, RLS-based authorization)
+- **Data model:** event-sourced — financial transactions are recorded as immutable events; current/periodic states are derived dynamically (snapshots/materialized views may be introduced later for performance)
+- **Multi-tenancy:** every domain record belongs to a `household`; access is controlled via `household_members` roles (`owner`, `editor`, `viewer`) enforced through Postgres RLS
+- **Multi-currency:** required from the start — transactional currencies, a base currency for analysis, and historical exchange rates
+- **Core domains:** budget envelopes (income allocation, expenses, transfers, recurring transactions) and assets/net worth (accounts, holdings, valuations, liabilities)
+- Full project background, domain model, and roadmap: see [docs/project-assumptions-and-plan.md](docs/project-assumptions-and-plan.md) (canonical, English) — [docs/zalozenia-i-plan.md](docs/zalozenia-i-plan.md) is the original Polish draft, kept temporarily for reference only.
+
+### Documentation Language
+
+- All project documentation (in `docs/` and elsewhere) MUST be written in **English** going forward.
+- Code comments, commit messages, and identifiers must also be in English.
+
 ## TypeScript Best Practices
 
 - Use strict type checking
