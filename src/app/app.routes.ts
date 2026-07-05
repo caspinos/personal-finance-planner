@@ -21,6 +21,12 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'invite/accept',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/household/accept-invite/accept-invite').then((m) => m.AcceptInvite),
+  },
+  {
     path: '',
     canActivate: [authGuard, householdGuard],
     loadComponent: () => import('./layout/shell/shell').then((m) => m.Shell),
@@ -28,6 +34,13 @@ export const routes: Routes = [
       {
         path: '',
         loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+      },
+      {
+        path: 'household/members',
+        loadComponent: () =>
+          import('./features/household/members/household-members').then(
+            (m) => m.HouseholdMembers,
+          ),
       },
       {
         path: 'budget',

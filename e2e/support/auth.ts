@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-const PASSWORD = 'test-password-123';
+export const PASSWORD = 'test-password-123';
 
 /** Generates a unique email so each test run/user starts with a clean household. */
 export function uniqueEmail(prefix: string): string {
@@ -17,15 +17,20 @@ export async function registerAndLogIn(page: Page, email: string): Promise<void>
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByText('Almost done!')).toBeVisible();
 
+  // Local Supabase has email confirmations disabled, so signUp returns a
+  // session immediately and the app navigates straight into the app, landing
+  // new users on the create-household flow.
+  await expect(page).toHaveURL(/\/household\/create$/);
+}
+
+/** Logs an already-registered user in and waits for the authenticated shell. */
+export async function logIn(page: Page, email: string): Promise<void> {
   await page.goto('/login');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Log in' }).click();
-
-  // New users land on the create-household flow.
-  await expect(page).toHaveURL(/\/household\/create$/);
+  await expect(page).not.toHaveURL(/\/login/);
 }
 
 /** Creates a household and waits for the redirect into the authenticated shell. */

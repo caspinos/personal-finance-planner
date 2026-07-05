@@ -29,8 +29,15 @@ export class AuthService {
     return this.supabase.auth.signInWithPassword({ email, password });
   }
 
-  signUp(email: string, password: string): Promise<{ error: AuthError | null }> {
-    return this.supabase.auth.signUp({ email, password });
+  async signUp(
+    email: string,
+    password: string,
+  ): Promise<{ session: Session | null; error: AuthError | null }> {
+    const { data, error } = await this.supabase.auth.signUp({ email, password });
+    if (data.session) {
+      this.sessionSignal.set(data.session);
+    }
+    return { session: data.session, error };
   }
 
   signOut(): Promise<{ error: AuthError | null }> {

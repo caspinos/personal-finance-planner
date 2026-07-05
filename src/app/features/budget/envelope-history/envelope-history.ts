@@ -37,32 +37,52 @@ function endOfMonth(date: Date): Date {
             <h1 class="text-2xl font-semibold">{{ envelope()?.name ?? 'Envelope history' }}</h1>
             <p class="text-muted-foreground text-sm">
               Transactions and transfers recorded in {{ monthLabel() }}.
+              @if (envelope()?.archived) {
+                &middot; Archived
+              }
             </p>
           </div>
         </div>
 
-        <div class="flex items-center gap-2">
-          <button
-            hlmBtn
-            variant="outline"
-            size="icon-sm"
-            type="button"
-            (click)="previousMonth()"
-            aria-label="Previous month"
-          >
-            &lsaquo;
-          </button>
-          <span class="min-w-40 text-center font-medium">{{ monthLabel() }}</span>
-          <button
-            hlmBtn
-            variant="outline"
-            size="icon-sm"
-            type="button"
-            (click)="nextMonth()"
-            aria-label="Next month"
-          >
-            &rsaquo;
-          </button>
+        <div class="flex flex-wrap items-center gap-2">
+          @if (envelope(); as envelope) {
+            <button
+              hlmBtn
+              variant="outline"
+              size="sm"
+              type="button"
+              [disabled]="archiving()"
+              (click)="toggleArchived(envelope)"
+            >
+              @if (archiving()) {
+                <hlm-spinner />
+              }
+              {{ envelope.archived ? 'Unarchive envelope' : 'Archive envelope' }}
+            </button>
+          }
+          <div class="flex items-center gap-2">
+            <button
+              hlmBtn
+              variant="outline"
+              size="icon-sm"
+              type="button"
+              (click)="previousMonth()"
+              aria-label="Previous month"
+            >
+              &lsaquo;
+            </button>
+            <span class="min-w-40 text-center font-medium">{{ monthLabel() }}</span>
+            <button
+              hlmBtn
+              variant="outline"
+              size="icon-sm"
+              type="button"
+              (click)="nextMonth()"
+              aria-label="Next month"
+            >
+              &rsaquo;
+            </button>
+          </div>
         </div>
       </div>
 
@@ -162,6 +182,7 @@ export class EnvelopeHistory {
   protected readonly envelope = signal<Envelope | null>(null);
   protected readonly events = signal<EnvelopeEvent[]>([]);
   protected readonly loading = signal(true);
+  protected readonly archiving = signal(false);
   protected readonly deletingKey = signal<string | null>(null);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly month = signal(startOfMonth(new Date()));
@@ -222,6 +243,20 @@ export class EnvelopeHistory {
     return event.kind === 'transaction'
       ? `/budget/transactions/${event.id}/edit`
       : `/budget/transfers/${event.id}/edit`;
+  }
+
+  protected async toggleArchived(envelope: Envelope): Promise<void> {
+    this.archiving.set(true);
+    this.errorMessage.set(null);
+
+    try {
+      await this.budget.setEnvelopeArchived(envelope.id, !envelope.archived);
+      this.envelope.set({ ...envelope, archived: !envelope.archived });
+    } catch (error) {
+      this.errorMessage.set(this.extractMessage(error));
+    } finally {
+      this.archiving.set(false);
+    }
   }
 
   protected async deleteEvent(event: EnvelopeEvent): Promise<void> {

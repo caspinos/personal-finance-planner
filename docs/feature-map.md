@@ -36,15 +36,24 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 - ✅ Create-household page (first-run flow when a user has no household yet)
 - ✅ Authenticated app shell (header with user email, nav links, and sign out)
   and a dashboard with a link into the budget
-- ⬜ Inviting other users to a household / managing member roles from the UI
-  (schema supports it; no UI or invite flow yet)
+- ✅ Inviting other users to a household and managing member roles from the
+  UI: a `household_invites` table (email + role + token, owner-only via RLS)
+  plus `accept_household_invite`/`get_household_members` SQL functions
+  (`supabase/migrations/20260705000000_household_invites.sql`). Household
+  members page (`/household/members`) lets owners generate a shareable
+  accept link per invite (no outbound email sending -- there's no SMTP setup
+  for production yet, so the owner shares the link through whatever channel
+  they like), change member roles, remove members, and revoke pending
+  invites; non-owners see a read-only member list. `authGuard` now carries a
+  `returnUrl` through login/register so an invite link works for logged-out
+  or brand-new users. Covered by `e2e/household.spec.ts`.
 - ⬜ Switching between multiple households in the UI (service supports
-  tracking a "current household", but only one can currently be created per
-  user in practice, and there's no household switcher UI)
+  tracking a "current household", and a user can now belong to more than one
+  via invites, but there's still no household switcher UI -- joining a
+  second household while already belonging to one has no way to select it)
 - ⬜ Audit log for membership/role changes
-- ⬜ Ability to disable public self-registration and invite users instead
-  (e.g. admin/owner-issued email invites with a token/link to accept); today
-  anyone can sign up via the public Register page
+- ⬜ Disabling public self-registration (anyone can still sign up via the
+  public Register page in addition to using an invite link)
 
 ## 2. Household budget (envelopes) — Stage 2
 
@@ -64,8 +73,9 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   transfer between envelopes, balances carry over to the next month
 - ✅ Editing/deleting individual transactions or transfers from the UI
   (available from the per-envelope activity history)
-- ⬜ Archiving/unarchiving envelopes from the UI (`setEnvelopeArchived`
-  exists on the service; no UI control yet)
+- ✅ Archiving/unarchiving envelopes from the UI (toggle on the per-envelope
+  history page, same pattern as net worth account archiving; archived
+  envelopes are hidden from the active budget list)
 - ⬜ Recurring transactions
 - ✅ Per-envelope transaction history view with monthly filtering, edit links,
   and delete actions for transactions/transfers
@@ -152,5 +162,9 @@ All ⬜ not started:
   creation, recording/editing/deleting valuations, liability sign handling,
   and account archiving/unarchiving (`e2e/net-worth.spec.ts`, same
   requirements as above).
+- ✅ E2E test coverage for household invites (Playwright): inviting a member
+  with a role, accepting via the generated link as a brand-new user, owner
+  role changes/removal, and revoking a pending invite (`e2e/household.spec.ts`,
+  same requirements as above).
 - ⬜ Accessibility audit (AXE) pass over implemented screens
 - ⬜ Audit log for key operations (`AuditLog` table from the domain model)
