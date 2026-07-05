@@ -9,6 +9,7 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,6 +31,7 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,6 +53,7 @@ jobs:
 
       - name: Run E2E tests
         run: npm run e2e
+        timeout-minutes: 10
 
       - name: Stop Supabase local stack
         if: always()
