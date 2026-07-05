@@ -1,59 +1,129 @@
-# PersonalFinancePlanner
+# Personal Finance Planner
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.0.5.
+[![CI](https://github.com/caspinos/personal-finance-planner/actions/workflows/ci.yml/badge.svg)](https://github.com/caspinos/personal-finance-planner/actions/workflows/ci.yml)
 
-## Development server
+A web app for household finances: envelope-style budgeting and net worth /
+investment tracking, with data shared across household members.
 
-To start a local development server, run:
+Built with Angular (standalone components, signals) on top of Supabase
+(Postgres, Auth, Row-Level Security). Financial data is modeled as immutable,
+event-sourced records — transactions and valuations are never mutated in
+place; balances and positions are derived dynamically from the event history.
+
+## Features
+
+- **Household budget (envelopes)** — allocate income into envelopes, record
+  expenses/income, transfer between envelopes, and see balances carry over
+  month to month.
+- **Net worth & investments** — track accounts (bank, investment, cash, real
+  estate, vehicles, precious metals, other assets, liabilities), record dated
+  valuations, and manage per-instrument holdings (buy/sell transactions) with
+  derived positions (quantity, average cost, unrealized gain).
+- **Multi-tenant households** — every record belongs to a household; access
+  is controlled by `owner` / `editor` / `viewer` roles enforced through
+  Postgres RLS policies, not application code.
+- **Multi-currency by design** — the data model supports transactional
+  currencies, a base currency, and historical exchange rates (rate
+  storage/conversion UI is still on the roadmap — see below).
+
+For a detailed breakdown of what's implemented vs. planned, see
+[docs/feature-map.md](docs/feature-map.md). For the full domain model and
+roadmap, see [docs/project-assumptions-and-plan.md](docs/project-assumptions-and-plan.md).
+
+## Tech stack
+
+- **Frontend:** Angular 22 (standalone components, signals, Signal Forms),
+  [spartan/ui](https://www.spartan.ng) (Tailwind-based component library)
+- **Backend:** [Supabase](https://supabase.com) — Postgres, Auth, Row-Level
+  Security
+- **Testing:** Vitest (unit), Playwright (end-to-end)
+- **Tooling:** Angular CLI, Prettier
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 22+
+- npm
+- [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
+  and Docker (for running the local Supabase stack)
+
+### Setup
 
 ```bash
-ng serve
+npm install
+npx supabase start
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+`npx supabase start` prints local API URL/keys; the defaults already checked
+into [src/environments/environment.development.ts](src/environments/environment.development.ts)
+match the standard local Supabase CLI setup, so no changes are usually
+needed for local development. Apply the database schema with:
 
 ```bash
-ng generate component component-name
+npx supabase db reset
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+### Development server
 
 ```bash
-ng generate --help
+npm start
 ```
 
-## Building
+Open `http://localhost:4200/`. The app reloads automatically on source
+changes.
 
-To build the project run:
+### Building
 
 ```bash
-ng build
+npm run build
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+Build artifacts are written to `dist/`.
 
-## Running unit tests
+### Tests
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+Unit tests (Vitest):
 
 ```bash
-ng test
+npm test
 ```
 
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
+End-to-end tests (Playwright, requires the local Supabase stack from
+`npx supabase start`):
 
 ```bash
-ng e2e
+npm run e2e
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+## Project structure
 
-## Additional Resources
+```
+src/app/
+  core/       # singleton services (auth, supabase client, domain services)
+  features/   # routed feature areas (auth, household, budget, net-worth, dashboard)
+  layout/     # app shell (header, nav)
+  ui/         # spartan/ui (Helm) components, owned and customizable
+supabase/
+  migrations/ # SQL schema + RLS policies
+docs/         # domain model, roadmap, feature status
+e2e/          # Playwright end-to-end tests
+```
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+## Documentation
+
+- [docs/project-assumptions-and-plan.md](docs/project-assumptions-and-plan.md) —
+  project background, domain model, and roadmap (canonical)
+- [docs/feature-map.md](docs/feature-map.md) — current implementation status
+- [AGENTS.md](AGENTS.md) — coding conventions for this repo (Angular/TypeScript
+  style, spartan/ui usage, project context) — also read by AI coding agents
+
+## Status
+
+This is a personal, work-in-progress project (pre-MVP). Core budgeting and
+net worth/investment tracking work end-to-end; multi-currency conversion,
+reporting/analytics, household invites, and data export are not yet built.
+
+## License
+
+[MIT](LICENSE)
