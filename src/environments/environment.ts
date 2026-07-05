@@ -3,6 +3,6 @@
 // never put the service_role key here.
 export const environment = {
   production: true,
-  supabaseUrl: '',
-  supabaseAnonKey: '',
+  supabaseUrl: 'https://bliwvaoxxydeampcjqvq.supabase.co',
+  supabaseAnonKey: 'sb_publishable_D4tDDr4fVtaFJio9LmucFw_4Wpp3CfI',
 };
