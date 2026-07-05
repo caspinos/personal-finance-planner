@@ -9,6 +9,7 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
 import { HlmToggleGroupImports } from '@spartan-ng/helm/toggle-group';
+import { TranslocoModule } from '@jsverse/transloco';
 
 import {
   AssetTransactionType,
@@ -33,38 +34,56 @@ function toDateInputValue(date: Date): string {
     HlmInputImports,
     HlmSpinnerImports,
     HlmToggleGroupImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex min-h-svh items-center justify-center p-6">
       <div hlmCard class="w-full max-w-sm">
         <div hlmCardHeader>
-          <h1 hlmCardTitle>{{ title() }}</h1>
-          <p hlmCardDescription>{{ description() }}</p>
+          <h1 hlmCardTitle>
+            {{
+              (isEditing() ? 'holdingTransactionForm.editTitle' : 'holdingTransactionForm.newTitle')
+                | transloco
+            }}
+          </h1>
+          <p hlmCardDescription>
+            {{
+              (isEditing()
+                ? 'holdingTransactionForm.editDescription'
+                : 'holdingTransactionForm.newDescription') | transloco
+            }}
+          </p>
         </div>
 
         <div hlmCardContent>
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Loading transaction...
+              {{ 'holdingTransactionForm.loading' | transloco }}
             </div>
           } @else {
             <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="flex flex-col gap-4">
               <div hlmField>
-                <label hlmFieldLabel>Type</label>
+                <label hlmFieldLabel>{{ 'holdingTransactionForm.type' | transloco }}</label>
                 <hlm-toggle-group
                   type="single"
                   [value]="type()"
                   (valueChange)="onTypeChange($event)"
                 >
-                  <button hlmToggleGroupItem value="buy" type="button">Buy</button>
-                  <button hlmToggleGroupItem value="sell" type="button">Sell</button>
+                  <button hlmToggleGroupItem value="buy" type="button">
+                    {{ 'holdingTransactionForm.buy' | transloco }}
+                  </button>
+                  <button hlmToggleGroupItem value="sell" type="button">
+                    {{ 'holdingTransactionForm.sell' | transloco }}
+                  </button>
                 </hlm-toggle-group>
               </div>
 
               <div class="grid gap-4 sm:grid-cols-2">
                 <div hlmField>
-                  <label hlmFieldLabel for="quantity">Quantity</label>
+                  <label hlmFieldLabel for="quantity">{{
+                    'holdingTransactionForm.quantity' | transloco
+                  }}</label>
                   <input
                     hlmInput
                     id="quantity"
@@ -74,12 +93,16 @@ function toDateInputValue(date: Date): string {
                     formControlName="quantity"
                   />
                   @if (form.controls.quantity.invalid && form.controls.quantity.touched) {
-                    <hlm-field-error forceShow>Enter a quantity greater than 0.</hlm-field-error>
+                    <hlm-field-error forceShow>{{
+                      'holdingTransactionForm.quantityError' | transloco
+                    }}</hlm-field-error>
                   }
                 </div>
 
                 <div hlmField>
-                  <label hlmFieldLabel for="pricePerUnit">Price per unit</label>
+                  <label hlmFieldLabel for="pricePerUnit">{{
+                    'holdingTransactionForm.pricePerUnit' | transloco
+                  }}</label>
                   <input
                     hlmInput
                     id="pricePerUnit"
@@ -89,31 +112,35 @@ function toDateInputValue(date: Date): string {
                     formControlName="pricePerUnit"
                   />
                   @if (form.controls.pricePerUnit.invalid && form.controls.pricePerUnit.touched) {
-                    <hlm-field-error forceShow>Enter a price of 0 or more.</hlm-field-error>
+                    <hlm-field-error forceShow>{{
+                      'holdingTransactionForm.priceError' | transloco
+                    }}</hlm-field-error>
                   }
                 </div>
               </div>
 
               <div class="grid gap-4 sm:grid-cols-2">
                 <div hlmField>
-                  <label hlmFieldLabel for="fee">Fee (optional)</label>
+                  <label hlmFieldLabel for="fee">{{ 'holdingTransactionForm.fee' | transloco }}</label>
                   <input hlmInput id="fee" type="number" min="0" step="0.01" formControlName="fee" />
                 </div>
 
                 <div hlmField>
-                  <label hlmFieldLabel for="occurredOn">Date</label>
+                  <label hlmFieldLabel for="occurredOn">{{
+                    'holdingTransactionForm.date' | transloco
+                  }}</label>
                   <input hlmInput id="occurredOn" type="date" formControlName="occurredOn" />
                 </div>
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="note">Note (optional)</label>
+                <label hlmFieldLabel for="note">{{ 'holdingTransactionForm.note' | transloco }}</label>
                 <input hlmInput id="note" type="text" formControlName="note" />
               </div>
 
               @if (errorMessage()) {
                 <div hlmAlert variant="destructive">
-                  <p hlmAlertTitle>Couldn't record the transaction</p>
+                  <p hlmAlertTitle>{{ 'holdingTransactionForm.errorTitle' | transloco }}</p>
                   <p hlmAlertDescription>{{ errorMessage() }}</p>
                 </div>
               }
@@ -121,8 +148,14 @@ function toDateInputValue(date: Date): string {
               <button hlmBtn type="submit" [disabled]="submitting()">
                 @if (submitting()) {
                   <hlm-spinner />
+                  {{ 'common.saving' | transloco }}
+                } @else {
+                  {{
+                    (isEditing()
+                      ? 'holdingTransactionForm.saveChanges'
+                      : 'holdingTransactionForm.save') | transloco
+                  }}
                 }
-                {{ submitLabel() }}
               </button>
             </form>
           }
@@ -146,21 +179,6 @@ export class HoldingTransactionForm {
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly transactionId = signal<string | null>(this.route.snapshot.paramMap.get('id'));
   protected readonly isEditing = computed(() => this.transactionId() !== null);
-  protected readonly title = computed(() =>
-    this.isEditing() ? 'Edit transaction' : 'Record a transaction',
-  );
-  protected readonly description = computed(() =>
-    this.isEditing()
-      ? 'Update a buy or sell event for this holding.'
-      : 'Log a buy or sell event for this holding.',
-  );
-  protected readonly submitLabel = computed(() => {
-    if (this.submitting()) {
-      return 'Saving...';
-    }
-
-    return this.isEditing() ? 'Save changes' : 'Save transaction';
-  });
 
   protected readonly form = this.fb.nonNullable.group({
     quantity: [0, [Validators.required, Validators.min(0.000001)]],

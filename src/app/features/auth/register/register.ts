@@ -8,6 +8,7 @@ import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { TranslocoModule } from '@jsverse/transloco';
 
 import { AuthService } from '../../../core/auth/auth.service';
 
@@ -22,33 +23,36 @@ import { AuthService } from '../../../core/auth/auth.service';
     HlmButtonImports,
     HlmAlertImports,
     HlmSpinnerImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex min-h-svh items-center justify-center p-6">
       <div hlmCard class="w-full max-w-sm">
         <div hlmCardHeader>
-          <h1 hlmCardTitle>Create an account</h1>
-          <p hlmCardDescription>Start tracking your budget and net worth.</p>
+          <h1 hlmCardTitle>{{ 'auth.register.title' | transloco }}</h1>
+          <p hlmCardDescription>{{ 'auth.register.description' | transloco }}</p>
         </div>
 
         <div hlmCardContent>
           @if (registered()) {
             <div hlmAlert>
-              <p hlmAlertTitle>Almost done!</p>
-              <p hlmAlertDescription>Check your email to confirm your account, then log in.</p>
+              <p hlmAlertTitle>{{ 'auth.register.registeredTitle' | transloco }}</p>
+              <p hlmAlertDescription>{{ 'auth.register.registeredDescription' | transloco }}</p>
             </div>
           } @else {
             <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="flex flex-col gap-4">
               <div hlmField>
-                <label hlmFieldLabel for="email">Email</label>
+                <label hlmFieldLabel for="email">{{ 'auth.register.email' | transloco }}</label>
                 <input hlmInput id="email" type="email" formControlName="email" autocomplete="email" />
                 @if (form.controls.email.invalid && form.controls.email.touched) {
-                  <hlm-field-error forceShow>Enter a valid email address.</hlm-field-error>
+                  <hlm-field-error forceShow>{{
+                    'auth.register.emailError' | transloco
+                  }}</hlm-field-error>
                 }
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="password">Password</label>
+                <label hlmFieldLabel for="password">{{ 'auth.register.password' | transloco }}</label>
                 <input
                   hlmInput
                   id="password"
@@ -57,13 +61,15 @@ import { AuthService } from '../../../core/auth/auth.service';
                   autocomplete="new-password"
                 />
                 @if (form.controls.password.invalid && form.controls.password.touched) {
-                  <hlm-field-error forceShow>Password must be at least 6 characters.</hlm-field-error>
+                  <hlm-field-error forceShow>{{
+                    'auth.register.passwordError' | transloco
+                  }}</hlm-field-error>
                 }
               </div>
 
               @if (errorMessage()) {
                 <div hlmAlert variant="destructive">
-                  <p hlmAlertTitle>Couldn't create your account</p>
+                  <p hlmAlertTitle>{{ 'auth.register.errorTitle' | transloco }}</p>
                   <p hlmAlertDescription>{{ errorMessage() }}</p>
                 </div>
               }
@@ -72,7 +78,7 @@ import { AuthService } from '../../../core/auth/auth.service';
                 @if (submitting()) {
                   <hlm-spinner />
                 }
-                {{ submitting() ? 'Creating account…' : 'Create account' }}
+                {{ (submitting() ? 'auth.register.submitting' : 'auth.register.submit') | transloco }}
               </button>
             </form>
           }
@@ -80,12 +86,12 @@ import { AuthService } from '../../../core/auth/auth.service';
 
         <div hlmCardFooter class="justify-center">
           <p class="text-muted-foreground text-sm">
-            Already have an account?
+            {{ 'auth.register.haveAccount' | transloco }}
             <a
               routerLink="/login"
               [queryParams]="returnUrl() ? { returnUrl: returnUrl() } : {}"
               class="text-primary underline underline-offset-4"
-              >Log in</a
+              >{{ 'auth.register.login' | transloco }}</a
             >
           </p>
         </div>

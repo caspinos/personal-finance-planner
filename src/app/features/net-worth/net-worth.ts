@@ -8,20 +8,22 @@ import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 import { HouseholdService } from '../../core/household/household.service';
+import { LanguageService } from '../../core/i18n/language.service';
 import {
   AssetLiquidityClass,
   NetWorthService,
   NetWorthSummaryRow,
 } from '../../core/net-worth/net-worth.service';
 
-const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'liquid', label: 'Liquid' },
-  { value: 'restricted', label: 'Restricted' },
-  { value: 'illiquid', label: 'Illiquid' },
-  { value: 'liability', label: 'Liability' },
+const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; labelKey: string }> = [
+  { value: 'cash', labelKey: 'netWorth.liquidity.cash' },
+  { value: 'liquid', labelKey: 'netWorth.liquidity.liquid' },
+  { value: 'restricted', labelKey: 'netWorth.liquidity.restricted' },
+  { value: 'illiquid', labelKey: 'netWorth.liquidity.illiquid' },
+  { value: 'liability', labelKey: 'netWorth.liquidity.liability' },
 ];
 
 @Component({
@@ -36,42 +38,48 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
     HlmFieldImports,
     HlmSelectImports,
     HlmSpinnerImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex flex-col gap-6">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 class="text-2xl font-semibold">Net worth</h1>
+          <h1 class="text-2xl font-semibold">{{ 'netWorth.title' | transloco }}</h1>
           <p class="text-muted-foreground text-sm">
-            Manual account valuations as of {{ asOfLabel() }}.
+            {{ 'netWorth.subtitle' | transloco: { date: asOfLabel() } }}
           </p>
         </div>
 
         <div class="flex flex-wrap gap-2">
-          <a hlmBtn variant="outline" size="sm" routerLink="/net-worth/valuations/new">
-            Add valuation
+          <a hlmBtn variant="ghost" size="sm" routerLink="/net-worth/timeline">
+            {{ 'netWorth.viewTimeline' | transloco }}
           </a>
-          <a hlmBtn size="sm" routerLink="/net-worth/accounts/new">New account</a>
+          <a hlmBtn variant="outline" size="sm" routerLink="/net-worth/valuations/new">
+            {{ 'netWorth.addValuation' | transloco }}
+          </a>
+          <a hlmBtn size="sm" routerLink="/net-worth/accounts/new">{{
+            'netWorth.newAccount' | transloco
+          }}</a>
         </div>
       </div>
 
       @if (errorMessage()) {
         <div hlmAlert variant="destructive">
-          <p hlmAlertTitle>Couldn't load net worth</p>
+          <p hlmAlertTitle>{{ 'netWorth.loadErrorTitle' | transloco }}</p>
           <p hlmAlertDescription>{{ errorMessage() }}</p>
         </div>
       }
 
       <div hlmCard>
         <div hlmCardHeader>
-          <h2 hlmCardTitle>Total net worth</h2>
-          <p hlmCardDescription>Liabilities are subtracted from the total.</p>
+          <h2 hlmCardTitle>{{ 'netWorth.totalNetWorth' | transloco }}</h2>
+          <p hlmCardDescription>{{ 'netWorth.totalNetWorthDescription' | transloco }}</p>
         </div>
         <div hlmCardContent>
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Loading net worth...
+              {{ 'netWorth.loading' | transloco }}
             </div>
           } @else {
             <p
@@ -82,9 +90,8 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
             </p>
             @if (netWorth.hasUnconvertedRows()) {
               <p class="text-muted-foreground mt-1 text-xs">
-                Some accounts have no exchange rate set &mdash; their amount is included
-                unconverted above.
-                <a routerLink="/rates" class="underline">Add a rate</a>
+                {{ 'netWorth.unconvertedNotice' | transloco }}
+                <a routerLink="/rates" class="underline">{{ 'netWorth.addRate' | transloco }}</a>
               </p>
             }
           }
@@ -94,41 +101,45 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
       @if (!loading() && rows().length === 0) {
         <div hlmCard class="max-w-md">
           <div hlmCardHeader>
-            <h2 hlmCardTitle>No asset accounts yet</h2>
-            <p hlmCardDescription>Create an account, then add a manual valuation snapshot.</p>
+            <h2 hlmCardTitle>{{ 'netWorth.noAccountsTitle' | transloco }}</h2>
+            <p hlmCardDescription>{{ 'netWorth.noAccountsDescription' | transloco }}</p>
           </div>
           <div hlmCardFooter>
-            <a hlmBtn size="sm" routerLink="/net-worth/accounts/new">Create account</a>
+            <a hlmBtn size="sm" routerLink="/net-worth/accounts/new">{{
+              'netWorth.createAccount' | transloco
+            }}</a>
           </div>
         </div>
       } @else if (!loading()) {
         <div class="flex flex-wrap items-end gap-2">
           <div hlmField class="w-48">
-            <label hlmFieldLabel>Filter by liquidity</label>
+            <label hlmFieldLabel>{{ 'netWorth.filterByLiquidity' | transloco }}</label>
             <hlm-select
               [value]="liquidityFilter()"
               (valueChange)="onLiquidityFilterChange($event)"
               [itemToString]="liquidityToString"
             >
               <hlm-select-trigger class="w-48">
-                <hlm-select-value placeholder="All liquidity classes" />
+                <hlm-select-value [placeholder]="'netWorth.allLiquidityClasses' | transloco" />
               </hlm-select-trigger>
               <hlm-select-content *hlmSelectPortal>
                 @for (option of liquidityClasses; track option.value) {
-                  <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
+                  <hlm-select-item [value]="option.value">{{
+                    option.labelKey | transloco
+                  }}</hlm-select-item>
                 }
               </hlm-select-content>
             </hlm-select>
           </div>
           @if (liquidityFilter()) {
             <button hlmBtn variant="ghost" size="sm" type="button" (click)="clearLiquidityFilter()">
-              Clear filter
+              {{ 'netWorth.clearFilter' | transloco }}
             </button>
           }
         </div>
 
         @if (groupedRows().length === 0) {
-          <p class="text-muted-foreground text-sm">No accounts match this filter.</p>
+          <p class="text-muted-foreground text-sm">{{ 'netWorth.noAccountsMatchFilter' | transloco }}</p>
         }
 
         @for (group of groupedRows(); track group.type) {
@@ -170,16 +181,18 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
                         </p>
                       } @else {
                         <p class="text-muted-foreground text-xs">
-                          No exchange rate &mdash;
-                          <a routerLink="/rates" class="underline">add one</a>
+                          {{ 'netWorth.noExchangeRate' | transloco }}
+                          <a routerLink="/rates" class="underline">{{
+                            'netWorth.addOne' | transloco
+                          }}</a>
                         </p>
                       }
                     }
                     <p class="text-muted-foreground text-sm">
                       @if (row.valued_on) {
-                        Valued {{ row.valued_on | date: 'mediumDate' }}
+                        {{ 'netWorth.valued' | transloco: { date: (row.valued_on | date: 'mediumDate') } }}
                       } @else {
-                        No valuation recorded yet
+                        {{ 'netWorth.noValuationYet' | transloco }}
                       }
                     </p>
                   </div>
@@ -190,7 +203,7 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
                       size="sm"
                       [routerLink]="['/net-worth/accounts', row.account_id]"
                     >
-                      View history
+                      {{ 'netWorth.viewHistory' | transloco }}
                     </a>
                     <a
                       hlmBtn
@@ -199,7 +212,7 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
                       routerLink="/net-worth/valuations/new"
                       [queryParams]="{ accountId: row.account_id }"
                     >
-                      Add valuation
+                      {{ 'netWorth.addValuation' | transloco }}
                     </a>
                   </div>
                 </div>
@@ -214,6 +227,8 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
 export class NetWorth {
   protected readonly netWorth = inject(NetWorthService);
   private readonly households = inject(HouseholdService);
+  private readonly transloco = inject(TranslocoService);
+  private readonly language = inject(LanguageService);
 
   protected readonly liquidityClasses = LIQUIDITY_CLASSES;
   protected readonly loading = signal(true);
@@ -225,7 +240,11 @@ export class NetWorth {
     () => this.households.currentHousehold()?.base_currency ?? 'PLN',
   );
   protected readonly asOfLabel = computed(() =>
-    this.asOf().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+    this.asOf().toLocaleDateString(this.language.localeTag(), {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    }),
   );
   protected readonly filteredRows = computed(() => {
     const filter = this.liquidityFilter();
@@ -255,14 +274,12 @@ export class NetWorth {
   }
 
   protected accountTypeLabel(type: NetWorthSummaryRow['account_type']): string {
-    return type
-      .split('_')
-      .map((part) => part[0]?.toUpperCase() + part.slice(1))
-      .join(' ');
+    return this.transloco.translate(`netWorth.accountType.${type}`);
   }
 
   protected liquidityLabel(liquidity: AssetLiquidityClass): string {
-    return LIQUIDITY_CLASSES.find((option) => option.value === liquidity)?.label ?? liquidity;
+    const key = LIQUIDITY_CLASSES.find((option) => option.value === liquidity)?.labelKey;
+    return key ? this.transloco.translate(key) : liquidity;
   }
 
   protected onLiquidityFilterChange(

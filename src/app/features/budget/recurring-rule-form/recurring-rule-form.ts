@@ -9,19 +9,13 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { HlmToggleGroupImports } from '@spartan-ng/helm/toggle-group';
 import { TranslocoModule } from '@jsverse/transloco';
 
-import { BudgetService } from '../../../core/budget/budget.service';
-
-function toDateInputValue(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
+import { BudgetService, BudgetTransactionType } from '../../../core/budget/budget.service';
 
 @Component({
-  selector: 'app-transfer-form',
+  selector: 'app-recurring-rule-form',
   imports: [
     ReactiveFormsModule,
     HlmCardImports,
@@ -31,6 +25,7 @@ function toDateInputValue(date: Date): string {
     HlmAlertImports,
     HlmSpinnerImports,
     HlmSelectImports,
+    HlmToggleGroupImports,
     TranslocoModule,
   ],
   template: `
@@ -38,33 +33,44 @@ function toDateInputValue(date: Date): string {
       <div hlmCard class="w-full max-w-sm">
         <div hlmCardHeader>
           <h1 hlmCardTitle>
-            {{ (isEditing() ? 'transferForm.editTitle' : 'transferForm.newTitle') | transloco }}
+            {{ (isEditing() ? 'recurringRuleForm.editTitle' : 'recurringRuleForm.newTitle') | transloco }}
           </h1>
-          <p hlmCardDescription>
-            {{
-              (isEditing() ? 'transferForm.editDescription' : 'transferForm.newDescription')
-                | transloco
-            }}
-          </p>
+          <p hlmCardDescription>{{ 'recurringRuleForm.description' | transloco }}</p>
         </div>
 
         <div hlmCardContent>
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              {{ 'transferForm.loading' | transloco }}
+              {{ 'recurringRuleForm.loading' | transloco }}
             </div>
           } @else {
             <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="flex flex-col gap-4">
               <div hlmField>
-                <label hlmFieldLabel>{{ 'transferForm.fromEnvelope' | transloco }}</label>
+                <label hlmFieldLabel>{{ 'recurringRuleForm.type' | transloco }}</label>
+                <hlm-toggle-group
+                  type="single"
+                  [value]="type()"
+                  (valueChange)="onTypeChange($event)"
+                >
+                  <button hlmToggleGroupItem value="income" type="button">
+                    {{ 'recurringRuleForm.topUp' | transloco }}
+                  </button>
+                  <button hlmToggleGroupItem value="expense" type="button">
+                    {{ 'recurringRuleForm.charge' | transloco }}
+                  </button>
+                </hlm-toggle-group>
+              </div>
+
+              <div hlmField>
+                <label hlmFieldLabel>{{ 'recurringRuleForm.envelope' | transloco }}</label>
                 <hlm-select
-                  [value]="fromEnvelopeId()"
-                  (valueChange)="fromEnvelopeId.set($event ?? undefined)"
+                  [value]="envelopeId()"
+                  (valueChange)="envelopeId.set($event ?? undefined)"
                   [itemToString]="envelopeToString"
                 >
                   <hlm-select-trigger class="w-full">
-                    <hlm-select-value [placeholder]="'transferForm.chooseEnvelope' | transloco" />
+                    <hlm-select-value [placeholder]="'recurringRuleForm.chooseEnvelope' | transloco" />
                   </hlm-select-trigger>
                   <hlm-select-content *hlmSelectPortal>
                     @for (envelope of envelopes(); track envelope.id) {
@@ -72,38 +78,25 @@ function toDateInputValue(date: Date): string {
                     }
                   </hlm-select-content>
                 </hlm-select>
-                @if (submitted() && !fromEnvelopeId()) {
+                @if (submitted() && !envelopeId()) {
                   <hlm-field-error forceShow>{{
-                    'transferForm.chooseSourceError' | transloco
+                    'recurringRuleForm.chooseEnvelopeError' | transloco
                   }}</hlm-field-error>
                 }
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel>{{ 'transferForm.toEnvelope' | transloco }}</label>
-                <hlm-select
-                  [value]="toEnvelopeId()"
-                  (valueChange)="toEnvelopeId.set($event ?? undefined)"
-                  [itemToString]="envelopeToString"
-                >
-                  <hlm-select-trigger class="w-full">
-                    <hlm-select-value [placeholder]="'transferForm.chooseEnvelope' | transloco" />
-                  </hlm-select-trigger>
-                  <hlm-select-content *hlmSelectPortal>
-                    @for (envelope of envelopes(); track envelope.id) {
-                      <hlm-select-item [value]="envelope.id">{{ envelope.name }}</hlm-select-item>
-                    }
-                  </hlm-select-content>
-                </hlm-select>
-                @if (submitted() && sameEnvelopeError()) {
+                <label hlmFieldLabel for="name">{{ 'recurringRuleForm.name' | transloco }}</label>
+                <input hlmInput id="name" type="text" formControlName="name" autocomplete="off" />
+                @if (form.controls.name.invalid && form.controls.name.touched) {
                   <hlm-field-error forceShow>{{
-                    'transferForm.chooseDifferentError' | transloco
+                    'recurringRuleForm.nameError' | transloco
                   }}</hlm-field-error>
                 }
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="amount">{{ 'transferForm.amount' | transloco }}</label>
+                <label hlmFieldLabel for="amount">{{ 'recurringRuleForm.amount' | transloco }}</label>
                 <input
                   hlmInput
                   id="amount"
@@ -114,26 +107,37 @@ function toDateInputValue(date: Date): string {
                 />
                 @if (form.controls.amount.invalid && form.controls.amount.touched) {
                   <hlm-field-error forceShow>{{
-                    'transferForm.amountError' | transloco
+                    'recurringRuleForm.amountError' | transloco
                   }}</hlm-field-error>
                 }
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="occurredOn">{{ 'transferForm.date' | transloco }}</label>
-                <input hlmInput id="occurredOn" type="date" formControlName="occurredOn" />
-              </div>
-
-              <div hlmField>
-                <label hlmFieldLabel for="description">{{
-                  'transferForm.description' | transloco
+                <label hlmFieldLabel for="dayOfMonth">{{
+                  'recurringRuleForm.dayOfMonth' | transloco
                 }}</label>
-                <input hlmInput id="description" type="text" formControlName="description" />
+                <input
+                  hlmInput
+                  id="dayOfMonth"
+                  type="number"
+                  min="1"
+                  max="28"
+                  step="1"
+                  formControlName="dayOfMonth"
+                />
+                <hlm-field-description>
+                  {{ 'recurringRuleForm.dayOfMonthDescription' | transloco }}
+                </hlm-field-description>
+                @if (form.controls.dayOfMonth.invalid && form.controls.dayOfMonth.touched) {
+                  <hlm-field-error forceShow>{{
+                    'recurringRuleForm.dayOfMonthError' | transloco
+                  }}</hlm-field-error>
+                }
               </div>
 
               @if (errorMessage()) {
                 <div hlmAlert variant="destructive">
-                  <p hlmAlertTitle>{{ 'transferForm.errorTitle' | transloco }}</p>
+                  <p hlmAlertTitle>{{ 'recurringRuleForm.errorTitle' | transloco }}</p>
                   <p hlmAlertDescription>{{ errorMessage() }}</p>
                 </div>
               }
@@ -141,9 +145,9 @@ function toDateInputValue(date: Date): string {
               <button hlmBtn type="submit" [disabled]="submitting()">
                 @if (submitting()) {
                   <hlm-spinner />
-                  {{ (isEditing() ? 'common.saving' : 'transferForm.transferring') | transloco }}
+                  {{ 'common.saving' | transloco }}
                 } @else {
-                  {{ (isEditing() ? 'transferForm.saveChanges' : 'transferForm.transfer') | transloco }}
+                  {{ (isEditing() ? 'recurringRuleForm.saveChanges' : 'recurringRuleForm.create') | transloco }}
                 }
               </button>
             </form>
@@ -153,45 +157,47 @@ function toDateInputValue(date: Date): string {
     </div>
   `,
 })
-export class TransferForm {
+export class RecurringRuleForm {
   private readonly budget = inject(BudgetService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder);
 
   protected readonly envelopes = this.budget.activeEnvelopes;
-  protected readonly fromEnvelopeId = signal<string | undefined>(undefined);
-  protected readonly toEnvelopeId = signal<string | undefined>(undefined);
+  protected readonly type = signal<BudgetTransactionType>('income');
+  protected readonly envelopeId = signal<string | undefined>(undefined);
   protected readonly submitting = signal(false);
   protected readonly loading = signal(false);
   protected readonly submitted = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
-  protected readonly transferId = signal<string | null>(this.route.snapshot.paramMap.get('id'));
-  protected readonly isEditing = computed(() => this.transferId() !== null);
+  protected readonly ruleId = signal<string | null>(this.route.snapshot.paramMap.get('id'));
+  protected readonly isEditing = computed(() => this.ruleId() !== null);
 
   protected readonly envelopeToString = (id: string): string =>
     this.envelopes().find((envelope) => envelope.id === id)?.name ?? '';
 
   protected readonly form = this.fb.nonNullable.group({
+    name: ['', [Validators.required, Validators.minLength(2)]],
     amount: [0, [Validators.required, Validators.min(0.01)]],
-    occurredOn: [toDateInputValue(new Date()), Validators.required],
-    description: [''],
+    dayOfMonth: [1, [Validators.required, Validators.min(1), Validators.max(28)]],
   });
 
   constructor() {
     void this.loadInitialData();
   }
 
-  protected sameEnvelopeError(): boolean {
-    const from = this.fromEnvelopeId();
-    const to = this.toEnvelopeId();
-    return !from || !to || from === to;
+  protected onTypeChange(
+    value: BudgetTransactionType | BudgetTransactionType[] | null | undefined,
+  ): void {
+    if (value === 'expense' || value === 'income') {
+      this.type.set(value);
+    }
   }
 
   protected async submit(): Promise<void> {
     this.submitted.set(true);
 
-    if (this.form.invalid || this.sameEnvelopeError() || this.submitting()) {
+    if (this.form.invalid || !this.envelopeId() || this.submitting()) {
       return;
     }
 
@@ -199,22 +205,22 @@ export class TransferForm {
     this.errorMessage.set(null);
 
     try {
-      const { amount, occurredOn, description } = this.form.getRawValue();
+      const { name, amount, dayOfMonth } = this.form.getRawValue();
       const input = {
-        fromEnvelopeId: this.fromEnvelopeId()!,
-        toEnvelopeId: this.toEnvelopeId()!,
+        envelopeId: this.envelopeId()!,
+        type: this.type(),
         amount,
-        occurredOn: new Date(occurredOn),
-        description,
+        name,
+        dayOfMonth,
       };
 
-      if (this.transferId()) {
-        await this.budget.updateTransfer(this.transferId()!, input);
-        await this.router.navigateByUrl(`/budget/envelopes/${this.fromEnvelopeId()}`);
+      if (this.ruleId()) {
+        await this.budget.updateRecurringRule(this.ruleId()!, input);
       } else {
-        await this.budget.transfer(input);
-        await this.router.navigateByUrl('/budget');
+        await this.budget.createRecurringRule(input);
       }
+
+      await this.router.navigateByUrl('/budget');
     } catch (error) {
       this.errorMessage.set(this.extractMessage(error));
     } finally {
@@ -229,14 +235,14 @@ export class TransferForm {
     try {
       await this.budget.loadEnvelopes();
 
-      if (this.transferId()) {
-        const transfer = await this.budget.loadTransfer(this.transferId()!);
-        this.fromEnvelopeId.set(transfer.from_envelope_id);
-        this.toEnvelopeId.set(transfer.to_envelope_id);
+      if (this.ruleId()) {
+        const rule = await this.budget.loadRecurringRule(this.ruleId()!);
+        this.type.set(rule.type);
+        this.envelopeId.set(rule.envelope_id);
         this.form.patchValue({
-          amount: Number(transfer.amount),
-          occurredOn: transfer.occurred_on,
-          description: transfer.description ?? '',
+          name: rule.name,
+          amount: Number(rule.amount),
+          dayOfMonth: rule.day_of_month,
         });
       }
     } catch (error) {

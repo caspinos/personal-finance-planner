@@ -23,9 +23,14 @@ export interface BudgetTransaction {
   amount: number;
   currency: string;
   occurred_on: string;
-  description: string | null;
+  name: string;
   created_by: string;
   created_at: string;
+}
+
+export interface TransactionNameSuggestion {
+  name: string;
+  envelope_id: string;
 }
 
 export interface EnvelopeBalance {
@@ -51,7 +56,7 @@ export interface EnvelopeTransactionEvent {
   occurred_on: string;
   amount: number;
   currency: string;
-  description: string | null;
+  name: string;
   transaction_type: BudgetTransactionType;
   envelope_id: string;
 }
@@ -71,11 +76,61 @@ export interface EnvelopeTransferEvent {
 
 export type EnvelopeEvent = EnvelopeTransactionEvent | EnvelopeTransferEvent;
 
+export interface GlobalTransactionEvent {
+  kind: 'transaction';
+  id: string;
+  occurred_on: string;
+  amount: number;
+  currency: string;
+  name: string;
+  transaction_type: BudgetTransactionType;
+  envelope_id: string;
+  envelope_name: string;
+}
+
+export interface GlobalTransferEvent {
+  kind: 'transfer';
+  id: string;
+  occurred_on: string;
+  amount: number;
+  currency: string;
+  description: string | null;
+  from_envelope_id: string;
+  to_envelope_id: string;
+  from_envelope_name: string;
+  to_envelope_name: string;
+}
+
+export type GlobalEvent = GlobalTransactionEvent | GlobalTransferEvent;
+
+export interface RecurringEnvelopeRule {
+  id: string;
+  household_id: string;
+  envelope_id: string;
+  type: BudgetTransactionType;
+  amount: number;
+  name: string;
+  day_of_month: number;
+  active: boolean;
+  next_run_on: string;
+  last_run_on: string | null;
+  created_by: string;
+  created_at: string;
+}
+
 function toDateOnly(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function nextOccurrence(dayOfMonth: number, from: Date): Date {
+  const candidate = new Date(from.getFullYear(), from.getMonth(), dayOfMonth);
+  if (candidate < new Date(from.getFullYear(), from.getMonth(), from.getDate())) {
+    return new Date(from.getFullYear(), from.getMonth() + 1, dayOfMonth);
+  }
+  return candidate;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -86,10 +141,12 @@ export class BudgetService {
 
   private readonly envelopesSignal = signal<Envelope[]>([]);
   private readonly balancesSignal = signal<Record<string, EnvelopeBalance>>({});
+  private readonly recurringRulesSignal = signal<RecurringEnvelopeRule[]>([]);
 
   readonly envelopes = this.envelopesSignal.asReadonly();
   readonly activeEnvelopes = computed(() => this.envelopesSignal().filter((e) => !e.archived));
   readonly balances = this.balancesSignal.asReadonly();
+  readonly recurringRules = this.recurringRulesSignal.asReadonly();
 
   async loadEnvelope(envelopeId: string): Promise<Envelope> {
     const householdId = this.requireHouseholdId();
@@ -201,7 +258,7 @@ export class BudgetService {
         occurred_on: transaction.occurred_on,
         amount: Number(transaction.amount),
         currency: transaction.currency,
-        description: transaction.description,
+        name: transaction.name,
         transaction_type: transaction.type,
         envelope_id: transaction.envelope_id,
       })),
@@ -226,6 +283,73 @@ export class BudgetService {
     ].sort((a, b) => b.occurred_on.localeCompare(a.occurred_on));
   }
 
+  async loadAllEvents(input: { from: Date; to: Date }): Promise<GlobalEvent[]> {
+    const householdId = this.requireHouseholdId();
+    const from = toDateOnly(input.from);
+    const to = toDateOnly(input.to);
+
+    const transactionQuery = this.supabase
+      .from('budget_transactions')
+      .select('*')
+      .eq('household_id', householdId)
+      .gte('occurred_on', from)
+      .lte('occurred_on', to)
+      .order('occurred_on', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    const transferQuery = this.supabase
+      .from('envelope_transfers')
+      .select('*')
+      .eq('household_id', householdId)
+      .gte('occurred_on', from)
+      .lte('occurred_on', to)
+      .order('occurred_on', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    const [
+      { data: transactions, error: transactionsError },
+      { data: transfers, error: transfersError },
+    ] = await Promise.all([transactionQuery, transferQuery]);
+
+    if (transactionsError) {
+      throw transactionsError;
+    }
+
+    if (transfersError) {
+      throw transfersError;
+    }
+
+    const envelopes = await this.ensureEnvelopesLoaded();
+    const envelopeNames = new Map(envelopes.map((envelope) => [envelope.id, envelope.name]));
+    const envelopeName = (id: string) => envelopeNames.get(id) ?? 'Unknown envelope';
+
+    return [
+      ...(transactions ?? []).map<GlobalEvent>((transaction) => ({
+        kind: 'transaction',
+        id: transaction.id,
+        occurred_on: transaction.occurred_on,
+        amount: Number(transaction.amount),
+        currency: transaction.currency,
+        name: transaction.name,
+        transaction_type: transaction.type,
+        envelope_id: transaction.envelope_id,
+        envelope_name: envelopeName(transaction.envelope_id),
+      })),
+      ...(transfers ?? []).map<GlobalEvent>((transfer) => ({
+        kind: 'transfer',
+        id: transfer.id,
+        occurred_on: transfer.occurred_on,
+        amount: Number(transfer.amount),
+        currency: 'PLN',
+        description: transfer.description,
+        from_envelope_id: transfer.from_envelope_id,
+        to_envelope_id: transfer.to_envelope_id,
+        from_envelope_name: envelopeName(transfer.from_envelope_id),
+        to_envelope_name: envelopeName(transfer.to_envelope_id),
+      })),
+    ].sort((a, b) => b.occurred_on.localeCompare(a.occurred_on));
+  }
+
   async createEnvelope(name: string): Promise<Envelope> {
     const householdId = this.requireHouseholdId();
     const userId = this.requireUserId();
@@ -241,6 +365,27 @@ export class BudgetService {
     }
 
     this.envelopesSignal.update((envelopes) => [...envelopes, data]);
+    return data;
+  }
+
+  async updateEnvelope(envelopeId: string, name: string): Promise<Envelope> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('envelopes')
+      .update({ name })
+      .eq('household_id', householdId)
+      .eq('id', envelopeId)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    this.envelopesSignal.update((envelopes) =>
+      envelopes.map((envelope) => (envelope.id === envelopeId ? data : envelope)),
+    );
     return data;
   }
 
@@ -283,7 +428,7 @@ export class BudgetService {
     type: BudgetTransactionType;
     amount: number;
     occurredOn: Date;
-    description?: string;
+    name: string;
   }): Promise<BudgetTransaction> {
     const householdId = this.requireHouseholdId();
     const userId = this.requireUserId();
@@ -296,7 +441,7 @@ export class BudgetService {
         type: input.type,
         amount: input.amount,
         occurred_on: toDateOnly(input.occurredOn),
-        description: input.description || null,
+        name: input.name,
         created_by: userId,
       })
       .select()
@@ -316,7 +461,7 @@ export class BudgetService {
       type: BudgetTransactionType;
       amount: number;
       occurredOn: Date;
-      description?: string;
+      name: string;
     },
   ): Promise<BudgetTransaction> {
     const householdId = this.requireHouseholdId();
@@ -328,7 +473,7 @@ export class BudgetService {
         type: input.type,
         amount: input.amount,
         occurred_on: toDateOnly(input.occurredOn),
-        description: input.description || null,
+        name: input.name,
       })
       .eq('household_id', householdId)
       .eq('id', transactionId)
@@ -340,6 +485,33 @@ export class BudgetService {
     }
 
     return data;
+  }
+
+  async loadTransactionNameSuggestions(): Promise<TransactionNameSuggestion[]> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('budget_transactions')
+      .select('name, envelope_id')
+      .eq('household_id', householdId)
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (error) {
+      throw error;
+    }
+
+    const seen = new Set<string>();
+    const suggestions: TransactionNameSuggestion[] = [];
+    for (const row of data ?? []) {
+      if (seen.has(row.name)) {
+        continue;
+      }
+      seen.add(row.name);
+      suggestions.push({ name: row.name, envelope_id: row.envelope_id });
+    }
+
+    return suggestions;
   }
 
   async deleteTransaction(transactionId: string): Promise<void> {
@@ -449,6 +621,156 @@ export class BudgetService {
     if (error) {
       throw error;
     }
+  }
+
+  async processDueRecurringRules(): Promise<number> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase.rpc('process_due_recurring_rules', {
+      p_household_id: householdId,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return Number(data ?? 0);
+  }
+
+  async loadRecurringRules(): Promise<RecurringEnvelopeRule[]> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('recurring_envelope_rules')
+      .select('*')
+      .eq('household_id', householdId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    this.recurringRulesSignal.set(data ?? []);
+    return this.recurringRulesSignal();
+  }
+
+  async loadRecurringRule(ruleId: string): Promise<RecurringEnvelopeRule> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('recurring_envelope_rules')
+      .select('*')
+      .eq('household_id', householdId)
+      .eq('id', ruleId)
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  async createRecurringRule(input: {
+    envelopeId: string;
+    type: BudgetTransactionType;
+    amount: number;
+    name: string;
+    dayOfMonth: number;
+  }): Promise<RecurringEnvelopeRule> {
+    const householdId = this.requireHouseholdId();
+    const userId = this.requireUserId();
+
+    const { data, error } = await this.supabase
+      .from('recurring_envelope_rules')
+      .insert({
+        household_id: householdId,
+        envelope_id: input.envelopeId,
+        type: input.type,
+        amount: input.amount,
+        name: input.name,
+        day_of_month: input.dayOfMonth,
+        next_run_on: toDateOnly(nextOccurrence(input.dayOfMonth, new Date())),
+        created_by: userId,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    this.recurringRulesSignal.update((rules) => [...rules, data]);
+    return data;
+  }
+
+  async updateRecurringRule(
+    ruleId: string,
+    input: {
+      envelopeId: string;
+      type: BudgetTransactionType;
+      amount: number;
+      name: string;
+      dayOfMonth: number;
+    },
+  ): Promise<RecurringEnvelopeRule> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('recurring_envelope_rules')
+      .update({
+        envelope_id: input.envelopeId,
+        type: input.type,
+        amount: input.amount,
+        name: input.name,
+        day_of_month: input.dayOfMonth,
+        next_run_on: toDateOnly(nextOccurrence(input.dayOfMonth, new Date())),
+      })
+      .eq('household_id', householdId)
+      .eq('id', ruleId)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    this.recurringRulesSignal.update((rules) => rules.map((r) => (r.id === ruleId ? data : r)));
+    return data;
+  }
+
+  async setRecurringRuleActive(ruleId: string, active: boolean): Promise<void> {
+    const householdId = this.requireHouseholdId();
+
+    const { error } = await this.supabase
+      .from('recurring_envelope_rules')
+      .update({ active })
+      .eq('household_id', householdId)
+      .eq('id', ruleId);
+
+    if (error) {
+      throw error;
+    }
+
+    this.recurringRulesSignal.update((rules) =>
+      rules.map((rule) => (rule.id === ruleId ? { ...rule, active } : rule)),
+    );
+  }
+
+  async deleteRecurringRule(ruleId: string): Promise<void> {
+    const householdId = this.requireHouseholdId();
+
+    const { error } = await this.supabase
+      .from('recurring_envelope_rules')
+      .delete()
+      .eq('household_id', householdId)
+      .eq('id', ruleId);
+
+    if (error) {
+      throw error;
+    }
+
+    this.recurringRulesSignal.update((rules) => rules.filter((r) => r.id !== ruleId));
   }
 
   private async ensureEnvelopesLoaded(): Promise<Envelope[]> {

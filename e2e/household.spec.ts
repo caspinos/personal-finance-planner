@@ -69,6 +69,10 @@ test.describe('Household members', () => {
     await page.goto(link);
     await expect(page).toHaveURL(/\/login\?returnUrl=/);
     await page.getByRole('link', { name: 'Register' }).click();
+    // The register route is lazy-loaded; wait for the navigation to land
+    // before interacting, otherwise the email fill can race the route swap
+    // and land in the login page's email field instead.
+    await expect(page).toHaveURL(/\/register\?returnUrl=/);
     await page.getByLabel('Email').fill(revoked);
     await page.getByLabel('Password').fill('test-password-123');
     await page.getByRole('button', { name: 'Create account' }).click();

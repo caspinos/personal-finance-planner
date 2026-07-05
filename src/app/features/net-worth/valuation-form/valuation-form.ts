@@ -9,6 +9,7 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { TranslocoModule } from '@jsverse/transloco';
 
 import { NetWorthService } from '../../../core/net-worth/net-worth.service';
 
@@ -30,37 +31,45 @@ function toDateInputValue(date: Date): string {
     HlmInputImports,
     HlmSelectImports,
     HlmSpinnerImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex min-h-svh items-center justify-center p-6">
       <div hlmCard class="w-full max-w-lg">
         <div hlmCardHeader>
-          <h1 hlmCardTitle>{{ title() }}</h1>
-          <p hlmCardDescription>{{ description() }}</p>
+          <h1 hlmCardTitle>
+            {{ (isEditing() ? 'valuationForm.editTitle' : 'valuationForm.newTitle') | transloco }}
+          </h1>
+          <p hlmCardDescription>
+            {{
+              (isEditing() ? 'valuationForm.editDescription' : 'valuationForm.newDescription')
+                | transloco
+            }}
+          </p>
         </div>
 
         <div hlmCardContent>
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Loading accounts...
+              {{ 'valuationForm.loadingAccounts' | transloco }}
             </div>
           } @else if (accounts().length === 0) {
             <div hlmAlert>
-              <p hlmAlertTitle>No asset accounts yet</p>
-              <p hlmAlertDescription>Create an account first, then add a valuation.</p>
+              <p hlmAlertTitle>{{ 'valuationForm.noAccountsTitle' | transloco }}</p>
+              <p hlmAlertDescription>{{ 'valuationForm.noAccountsDescription' | transloco }}</p>
             </div>
           } @else {
             <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="flex flex-col gap-4">
               <div hlmField>
-                <label hlmFieldLabel>Account</label>
+                <label hlmFieldLabel>{{ 'valuationForm.account' | transloco }}</label>
                 <hlm-select
                   [value]="accountId()"
                   (valueChange)="onAccountChange($event)"
                   [itemToString]="accountToString"
                 >
                   <hlm-select-trigger class="w-full">
-                    <hlm-select-value placeholder="Choose an account" />
+                    <hlm-select-value [placeholder]="'valuationForm.chooseAccount' | transloco" />
                   </hlm-select-trigger>
                   <hlm-select-content *hlmSelectPortal>
                     @for (account of accounts(); track account.id) {
@@ -69,13 +78,17 @@ function toDateInputValue(date: Date): string {
                   </hlm-select-content>
                 </hlm-select>
                 @if (submitted() && !accountId()) {
-                  <hlm-field-error forceShow>Choose an account.</hlm-field-error>
+                  <hlm-field-error forceShow>{{
+                    'valuationForm.chooseAccountError' | transloco
+                  }}</hlm-field-error>
                 }
               </div>
 
               <div class="grid gap-4 sm:grid-cols-2">
                 <div hlmField>
-                  <label hlmFieldLabel for="value">Value ({{ currency() }})</label>
+                  <label hlmFieldLabel for="value">{{
+                    'valuationForm.value' | transloco: { currency: currency() }
+                  }}</label>
                   <input
                     hlmInput
                     id="value"
@@ -85,19 +98,21 @@ function toDateInputValue(date: Date): string {
                     formControlName="value"
                   />
                   @if (form.controls.value.invalid && form.controls.value.touched) {
-                    <hlm-field-error forceShow>Enter a value of 0 or more.</hlm-field-error>
+                    <hlm-field-error forceShow>{{
+                      'valuationForm.valueError' | transloco
+                    }}</hlm-field-error>
                   }
                 </div>
 
                 <div hlmField>
-                  <label hlmFieldLabel for="valuedOn">Valued on</label>
+                  <label hlmFieldLabel for="valuedOn">{{ 'valuationForm.valuedOn' | transloco }}</label>
                   <input hlmInput id="valuedOn" type="date" formControlName="valuedOn" />
                 </div>
               </div>
 
               <div hlmField>
                 <label hlmFieldLabel for="contributionAmount">
-                  Contribution since last valuation (optional)
+                  {{ 'valuationForm.contributionAmount' | transloco }}
                 </label>
                 <input
                   hlmInput
@@ -109,13 +124,13 @@ function toDateInputValue(date: Date): string {
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="note">Note (optional)</label>
+                <label hlmFieldLabel for="note">{{ 'valuationForm.note' | transloco }}</label>
                 <input hlmInput id="note" type="text" formControlName="note" />
               </div>
 
               @if (errorMessage()) {
                 <div hlmAlert variant="destructive">
-                  <p hlmAlertTitle>Couldn't save the valuation</p>
+                  <p hlmAlertTitle>{{ 'valuationForm.errorTitle' | transloco }}</p>
                   <p hlmAlertDescription>{{ errorMessage() }}</p>
                 </div>
               }
@@ -123,8 +138,13 @@ function toDateInputValue(date: Date): string {
               <button hlmBtn type="submit" [disabled]="submitting()">
                 @if (submitting()) {
                   <hlm-spinner />
+                  {{ 'common.saving' | transloco }}
+                } @else {
+                  {{
+                    (isEditing() ? 'valuationForm.saveChanges' : 'valuationForm.saveValuation')
+                      | transloco
+                  }}
                 }
-                {{ submitting() ? 'Saving...' : submitLabel() }}
               </button>
             </form>
           }
@@ -152,15 +172,6 @@ export class ValuationForm {
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly valuationId = signal<string | null>(this.route.snapshot.paramMap.get('id'));
   protected readonly isEditing = computed(() => this.valuationId() !== null);
-  protected readonly title = computed(() => (this.isEditing() ? 'Edit valuation' : 'Add valuation'));
-  protected readonly description = computed(() =>
-    this.isEditing()
-      ? "Update this dated snapshot of an account's value."
-      : "Record a dated snapshot of an account's value to update net worth.",
-  );
-  protected readonly submitLabel = computed(() =>
-    this.isEditing() ? 'Save changes' : 'Save valuation',
-  );
 
   protected readonly accountToString = (id: string): string =>
     this.accounts().find((account) => account.id === id)?.name ?? '';

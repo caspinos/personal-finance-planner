@@ -9,6 +9,7 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 import {
   AssetAccountType,
@@ -16,24 +17,24 @@ import {
   NetWorthService,
 } from '../../../core/net-worth/net-worth.service';
 
-const ACCOUNT_TYPES: Array<{ value: AssetAccountType; label: string }> = [
-  { value: 'bank', label: 'Bank account' },
-  { value: 'investment', label: 'Investment account' },
-  { value: 'cash', label: 'Cash' },
-  { value: 'real_estate', label: 'Real estate' },
-  { value: 'vehicle', label: 'Vehicle' },
-  { value: 'precious_metals', label: 'Precious metals' },
-  { value: 'currency', label: 'Currency' },
-  { value: 'other_asset', label: 'Other asset' },
-  { value: 'liability', label: 'Liability' },
+const ACCOUNT_TYPES: Array<{ value: AssetAccountType; labelKey: string }> = [
+  { value: 'bank', labelKey: 'netWorth.accountType.bank' },
+  { value: 'investment', labelKey: 'netWorth.accountType.investment' },
+  { value: 'cash', labelKey: 'netWorth.accountType.cash' },
+  { value: 'real_estate', labelKey: 'netWorth.accountType.real_estate' },
+  { value: 'vehicle', labelKey: 'netWorth.accountType.vehicle' },
+  { value: 'precious_metals', labelKey: 'netWorth.accountType.precious_metals' },
+  { value: 'currency', labelKey: 'netWorth.accountType.currency' },
+  { value: 'other_asset', labelKey: 'netWorth.accountType.other_asset' },
+  { value: 'liability', labelKey: 'netWorth.accountType.liability' },
 ];
 
-const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'liquid', label: 'Liquid' },
-  { value: 'restricted', label: 'Restricted' },
-  { value: 'illiquid', label: 'Illiquid' },
-  { value: 'liability', label: 'Liability' },
+const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; labelKey: string }> = [
+  { value: 'cash', labelKey: 'netWorth.liquidity.cash' },
+  { value: 'liquid', labelKey: 'netWorth.liquidity.liquid' },
+  { value: 'restricted', labelKey: 'netWorth.liquidity.restricted' },
+  { value: 'illiquid', labelKey: 'netWorth.liquidity.illiquid' },
+  { value: 'liability', labelKey: 'netWorth.liquidity.liability' },
 ];
 
 @Component({
@@ -47,59 +48,64 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
     HlmInputImports,
     HlmSelectImports,
     HlmSpinnerImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex min-h-svh items-center justify-center p-6">
       <div hlmCard class="w-full max-w-lg">
         <div hlmCardHeader>
-          <h1 hlmCardTitle>New asset account</h1>
+          <h1 hlmCardTitle>{{ 'accountForm.title' | transloco }}</h1>
           <p hlmCardDescription>
-            Add a bank account, investment account, asset, or liability to track net worth.
+            {{ 'accountForm.description' | transloco }}
           </p>
         </div>
 
         <div hlmCardContent>
           <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="flex flex-col gap-4">
             <div hlmField>
-              <label hlmFieldLabel for="name">Account name</label>
+              <label hlmFieldLabel for="name">{{ 'accountForm.name' | transloco }}</label>
               <input hlmInput id="name" type="text" formControlName="name" autocomplete="off" />
               @if (form.controls.name.invalid && form.controls.name.touched) {
-                <hlm-field-error forceShow>Enter at least 2 characters.</hlm-field-error>
+                <hlm-field-error forceShow>{{ 'accountForm.nameError' | transloco }}</hlm-field-error>
               }
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2">
               <div hlmField>
-                <label hlmFieldLabel>Type</label>
+                <label hlmFieldLabel>{{ 'accountForm.type' | transloco }}</label>
                 <hlm-select
                   [value]="type()"
                   (valueChange)="setType($event)"
                   [itemToString]="accountTypeToString"
                 >
                   <hlm-select-trigger class="w-full">
-                    <hlm-select-value placeholder="Choose type" />
+                    <hlm-select-value [placeholder]="'accountForm.chooseType' | transloco" />
                   </hlm-select-trigger>
                   <hlm-select-content *hlmSelectPortal>
                     @for (option of accountTypes; track option.value) {
-                      <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
+                      <hlm-select-item [value]="option.value">{{
+                        option.labelKey | transloco
+                      }}</hlm-select-item>
                     }
                   </hlm-select-content>
                 </hlm-select>
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel>Liquidity</label>
+                <label hlmFieldLabel>{{ 'accountForm.liquidity' | transloco }}</label>
                 <hlm-select
                   [value]="liquidity()"
                   (valueChange)="setLiquidity($event)"
                   [itemToString]="liquidityToString"
                 >
                   <hlm-select-trigger class="w-full">
-                    <hlm-select-value placeholder="Choose liquidity" />
+                    <hlm-select-value [placeholder]="'accountForm.chooseLiquidity' | transloco" />
                   </hlm-select-trigger>
                   <hlm-select-content *hlmSelectPortal>
                     @for (option of liquidityClasses; track option.value) {
-                      <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
+                      <hlm-select-item [value]="option.value">{{
+                        option.labelKey | transloco
+                      }}</hlm-select-item>
                     }
                   </hlm-select-content>
                 </hlm-select>
@@ -108,7 +114,7 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
 
             <div class="grid gap-4 sm:grid-cols-2">
               <div hlmField>
-                <label hlmFieldLabel for="currency">Currency</label>
+                <label hlmFieldLabel for="currency">{{ 'accountForm.currency' | transloco }}</label>
                 <input
                   hlmInput
                   id="currency"
@@ -119,26 +125,28 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="institution">Institution (optional)</label>
+                <label hlmFieldLabel for="institution">{{
+                  'accountForm.institution' | transloco
+                }}</label>
                 <input hlmInput id="institution" type="text" formControlName="institution" />
               </div>
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2">
               <div hlmField>
-                <label hlmFieldLabel for="category">Category (optional)</label>
+                <label hlmFieldLabel for="category">{{ 'accountForm.category' | transloco }}</label>
                 <input hlmInput id="category" type="text" formControlName="category" />
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="ownerName">Owner (optional)</label>
+                <label hlmFieldLabel for="ownerName">{{ 'accountForm.owner' | transloco }}</label>
                 <input hlmInput id="ownerName" type="text" formControlName="ownerName" />
               </div>
             </div>
 
             @if (errorMessage()) {
               <div hlmAlert variant="destructive">
-                <p hlmAlertTitle>Couldn't create the account</p>
+                <p hlmAlertTitle>{{ 'accountForm.errorTitle' | transloco }}</p>
                 <p hlmAlertDescription>{{ errorMessage() }}</p>
               </div>
             }
@@ -147,7 +155,7 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
               @if (submitting()) {
                 <hlm-spinner />
               }
-              {{ submitting() ? 'Creating...' : 'Create account' }}
+              {{ (submitting() ? 'accountForm.creating' : 'accountForm.create') | transloco }}
             </button>
           </form>
         </div>
@@ -159,6 +167,7 @@ export class AccountForm {
   private readonly netWorth = inject(NetWorthService);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
+  private readonly transloco = inject(TranslocoService);
 
   protected readonly accountTypes = ACCOUNT_TYPES;
   protected readonly liquidityClasses = LIQUIDITY_CLASSES;
@@ -167,10 +176,14 @@ export class AccountForm {
   protected readonly submitting = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
 
-  protected readonly accountTypeToString = (value: AssetAccountType): string =>
-    ACCOUNT_TYPES.find((option) => option.value === value)?.label ?? '';
-  protected readonly liquidityToString = (value: AssetLiquidityClass): string =>
-    LIQUIDITY_CLASSES.find((option) => option.value === value)?.label ?? '';
+  protected readonly accountTypeToString = (value: AssetAccountType): string => {
+    const key = ACCOUNT_TYPES.find((option) => option.value === value)?.labelKey;
+    return key ? this.transloco.translate(key) : '';
+  };
+  protected readonly liquidityToString = (value: AssetLiquidityClass): string => {
+    const key = LIQUIDITY_CLASSES.find((option) => option.value === value)?.labelKey;
+    return key ? this.transloco.translate(key) : '';
+  };
 
   protected readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.required, Validators.minLength(2)]],

@@ -169,26 +169,50 @@ export class NetWorthService {
       throw error;
     }
 
+    const summary = this.mapSummaryRows(data);
+    this.summarySignal.set(summary);
+    return summary;
+  }
+
+  /** Loads a net worth summary for each given date, e.g. to render a monthly timeline. */
+  async loadTimeline(dates: Date[]): Promise<NetWorthSummaryRow[][]> {
+    const householdId = this.requireHouseholdId();
+
+    return Promise.all(
+      dates.map(async (date) => {
+        const { data, error } = await this.supabase.rpc('get_net_worth_summary', {
+          p_household_id: householdId,
+          p_as_of: toDateOnly(date),
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        return this.mapSummaryRows(data);
+      }),
+    );
+  }
+
+  private mapSummaryRows(data: unknown[] | null): NetWorthSummaryRow[] {
     const summary: NetWorthSummaryRow[] = [];
-    for (const row of data ?? []) {
+    for (const row of (data ?? []) as Array<Record<string, unknown>>) {
       summary.push({
-        account_id: row.account_id,
-        account_name: row.account_name,
-        account_type: row.account_type,
-        liquidity: row.liquidity,
-        category: row.category,
-        currency: row.currency,
-        valuation_id: row.valuation_id,
-        valued_on: row.valued_on,
-        value: Number(row.value),
-        signed_value: Number(row.signed_value),
-        value_in_base: row.value_in_base === null ? null : Number(row.value_in_base),
+        account_id: row['account_id'] as string,
+        account_name: row['account_name'] as string,
+        account_type: row['account_type'] as AssetAccountType,
+        liquidity: row['liquidity'] as AssetLiquidityClass,
+        category: row['category'] as string | null,
+        currency: row['currency'] as string,
+        valuation_id: row['valuation_id'] as string | null,
+        valued_on: row['valued_on'] as string | null,
+        value: Number(row['value']),
+        signed_value: Number(row['signed_value']),
+        value_in_base: row['value_in_base'] === null ? null : Number(row['value_in_base']),
         signed_value_in_base:
-          row.signed_value_in_base === null ? null : Number(row.signed_value_in_base),
+          row['signed_value_in_base'] === null ? null : Number(row['signed_value_in_base']),
       });
     }
-
-    this.summarySignal.set(summary);
     return summary;
   }
 

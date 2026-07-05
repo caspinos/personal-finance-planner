@@ -6,8 +6,10 @@ import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 import { BudgetService, Envelope, EnvelopeEvent } from '../../../core/budget/budget.service';
+import { LanguageService } from '../../../core/i18n/language.service';
 
 function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -27,18 +29,23 @@ function endOfMonth(date: Date): Date {
     HlmButtonImports,
     HlmCardImports,
     HlmSpinnerImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex flex-col gap-6">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="flex flex-col gap-2">
-          <a hlmBtn variant="ghost" size="sm" routerLink="/budget">Back to budget</a>
+          <a hlmBtn variant="ghost" size="sm" routerLink="/budget">{{
+            'envelopeHistory.backToBudget' | transloco
+          }}</a>
           <div>
-            <h1 class="text-2xl font-semibold">{{ envelope()?.name ?? 'Envelope history' }}</h1>
+            <h1 class="text-2xl font-semibold">
+              {{ envelope()?.name ?? ('envelopeHistory.defaultTitle' | transloco) }}
+            </h1>
             <p class="text-muted-foreground text-sm">
-              Transactions and transfers recorded in {{ monthLabel() }}.
+              {{ 'envelopeHistory.subtitle' | transloco: { month: monthLabel() } }}
               @if (envelope()?.archived) {
-                &middot; Archived
+                &middot; {{ 'envelopeHistory.archived' | transloco }}
               }
             </p>
           </div>
@@ -46,6 +53,9 @@ function endOfMonth(date: Date): Date {
 
         <div class="flex flex-wrap items-center gap-2">
           @if (envelope(); as envelope) {
+            <a hlmBtn variant="outline" size="sm" [routerLink]="['/budget/envelopes', envelope.id, 'edit']">
+              {{ 'budget.rename' | transloco }}
+            </a>
             <button
               hlmBtn
               variant="outline"
@@ -57,7 +67,10 @@ function endOfMonth(date: Date): Date {
               @if (archiving()) {
                 <hlm-spinner />
               }
-              {{ envelope.archived ? 'Unarchive envelope' : 'Archive envelope' }}
+              {{
+                (envelope.archived ? 'envelopeHistory.unarchiveEnvelope' : 'envelopeHistory.archiveEnvelope')
+                  | transloco
+              }}
             </button>
           }
           <div class="flex items-center gap-2">
@@ -88,21 +101,23 @@ function endOfMonth(date: Date): Date {
 
       @if (errorMessage()) {
         <div hlmAlert variant="destructive">
-          <p hlmAlertTitle>Couldn't load envelope history</p>
+          <p hlmAlertTitle>{{ 'envelopeHistory.loadErrorTitle' | transloco }}</p>
           <p hlmAlertDescription>{{ errorMessage() }}</p>
         </div>
       }
 
       <div hlmCard>
         <div hlmCardHeader>
-          <h2 hlmCardTitle>Balance</h2>
-          <p hlmCardDescription>As of the end of {{ monthLabel() }}</p>
+          <h2 hlmCardTitle>{{ 'envelopeHistory.balanceTitle' | transloco }}</h2>
+          <p hlmCardDescription>
+            {{ 'envelopeHistory.balanceSubtitle' | transloco: { month: monthLabel() } }}
+          </p>
         </div>
         <div hlmCardContent>
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Loading history...
+              {{ 'envelopeHistory.loadingHistory' | transloco }}
             </div>
           } @else {
             <p class="text-3xl font-semibold" [class.text-destructive]="currentBalance() < 0">
@@ -114,17 +129,17 @@ function endOfMonth(date: Date): Date {
 
       <div hlmCard>
         <div hlmCardHeader>
-          <h2 hlmCardTitle>Activity</h2>
-          <p hlmCardDescription>Events that changed this envelope during the selected month.</p>
+          <h2 hlmCardTitle>{{ 'envelopeHistory.activityTitle' | transloco }}</h2>
+          <p hlmCardDescription>{{ 'envelopeHistory.activityDescription' | transloco }}</p>
         </div>
         <div hlmCardContent>
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Loading activity...
+              {{ 'envelopeHistory.loadingActivity' | transloco }}
             </div>
           } @else if (events().length === 0) {
-            <p class="text-muted-foreground text-sm">No activity recorded for this month.</p>
+            <p class="text-muted-foreground text-sm">{{ 'envelopeHistory.noActivity' | transloco }}</p>
           } @else {
             <ul class="flex flex-col gap-3">
               @for (event of events(); track event.kind + event.id) {
@@ -139,7 +154,7 @@ function endOfMonth(date: Date): Date {
                       </span>
                     </div>
                     <p class="text-muted-foreground truncate text-sm">
-                      {{ event.description || eventDescription(event) }}
+                      {{ eventDescription(event) }}
                     </p>
                   </div>
 
@@ -150,7 +165,9 @@ function endOfMonth(date: Date): Date {
                     >
                       {{ signedAmount(event) | number: '1.2-2' }} {{ event.currency }}
                     </span>
-                    <a hlmBtn variant="outline" size="sm" [routerLink]="editLink(event)"> Edit </a>
+                    <a hlmBtn variant="outline" size="sm" [routerLink]="editLink(event)">
+                      {{ 'common.edit' | transloco }}
+                    </a>
                     <button
                       hlmBtn
                       variant="destructive"
@@ -162,7 +179,7 @@ function endOfMonth(date: Date): Date {
                       @if (deletingKey() === event.kind + event.id) {
                         <hlm-spinner />
                       }
-                      Delete
+                      {{ 'common.delete' | transloco }}
                     </button>
                   </div>
                 </li>
@@ -178,6 +195,8 @@ export class EnvelopeHistory {
   private readonly budget = inject(BudgetService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly transloco = inject(TranslocoService);
+  private readonly language = inject(LanguageService);
 
   protected readonly envelope = signal<Envelope | null>(null);
   protected readonly events = signal<EnvelopeEvent[]>([]);
@@ -190,7 +209,7 @@ export class EnvelopeHistory {
 
   protected readonly envelopeId = computed(() => this.route.snapshot.paramMap.get('id') ?? '');
   protected readonly monthLabel = computed(() =>
-    this.month().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    this.month().toLocaleDateString(this.language.localeTag(), { month: 'long', year: 'numeric' }),
   );
   protected readonly currentBalance = computed(() => {
     const envelopeId = this.envelopeId();
@@ -215,20 +234,30 @@ export class EnvelopeHistory {
 
   protected eventTitle(event: EnvelopeEvent): string {
     if (event.kind === 'transaction') {
-      return event.transaction_type === 'income' ? 'Income' : 'Expense';
+      return this.transloco.translate(
+        event.transaction_type === 'income' ? 'envelopeHistory.income' : 'envelopeHistory.expense',
+      );
     }
 
-    return event.direction === 'in'
-      ? `Transfer from ${event.other_envelope_name}`
-      : `Transfer to ${event.other_envelope_name}`;
+    return this.transloco.translate(
+      event.direction === 'in' ? 'envelopeHistory.transferFrom' : 'envelopeHistory.transferTo',
+      { name: event.other_envelope_name },
+    );
   }
 
   protected eventDescription(event: EnvelopeEvent): string {
     if (event.kind === 'transaction') {
-      return event.transaction_type === 'income' ? 'Envelope top-up' : 'Envelope expense';
+      return event.name;
     }
 
-    return event.direction === 'in' ? 'Incoming envelope transfer' : 'Outgoing envelope transfer';
+    return (
+      event.description ??
+      this.transloco.translate(
+        event.direction === 'in'
+          ? 'envelopeHistory.incomingTransfer'
+          : 'envelopeHistory.outgoingTransfer',
+      )
+    );
   }
 
   protected signedAmount(event: EnvelopeEvent): number {
@@ -260,7 +289,9 @@ export class EnvelopeHistory {
   }
 
   protected async deleteEvent(event: EnvelopeEvent): Promise<void> {
-    const confirmed = window.confirm(`Delete this ${event.kind}? This cannot be undone.`);
+    const confirmed = window.confirm(
+      this.transloco.translate('envelopeHistory.deleteConfirm', { kind: event.kind }),
+    );
     if (!confirmed) {
       return;
     }
