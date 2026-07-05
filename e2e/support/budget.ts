@@ -20,10 +20,10 @@ export async function createEnvelope(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
 }
 
-/** Records an expense/income transaction from the budget page. */
+/** Records an expense/income transaction from the budget page. Name is required by the form. */
 export async function recordTransaction(
   page: Page,
-  options: { type: 'Expense' | 'Income'; envelope: string; amount: string; description?: string }
+  options: { type: 'Expense' | 'Income'; envelope: string; amount: string; name: string }
 ): Promise<void> {
   await page.getByRole('link', { name: 'Record transaction' }).click();
   await expect(page).toHaveURL('/budget/transactions/new');
@@ -34,10 +34,7 @@ export async function recordTransaction(
 
   await selectComboboxOption(page, 'Envelope', options.envelope);
   await page.getByLabel('Amount').fill(options.amount);
-
-  if (options.description) {
-    await page.getByLabel('Description (optional)').fill(options.description);
-  }
+  await page.getByLabel('Name').fill(options.name);
 
   await page.getByRole('button', { name: 'Save transaction' }).click();
   await expect(page).toHaveURL('/budget');

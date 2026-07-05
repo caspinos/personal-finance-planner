@@ -21,7 +21,12 @@ test.describe('Budget envelopes', () => {
   test('creates an envelope and records an income transaction', async ({ page }) => {
     await createEnvelope(page, 'Groceries');
 
-    await recordTransaction(page, { type: 'Income', envelope: 'Groceries', amount: '500' });
+    await recordTransaction(page, {
+      type: 'Income',
+      envelope: 'Groceries',
+      amount: '500',
+      name: 'Paycheck',
+    });
 
     await expectEnvelopeBalance(page, 'Groceries', '500.00');
   });
@@ -29,8 +34,18 @@ test.describe('Budget envelopes', () => {
   test('records an expense and shows a reduced balance', async ({ page }) => {
     await createEnvelope(page, 'Groceries');
 
-    await recordTransaction(page, { type: 'Income', envelope: 'Groceries', amount: '500' });
-    await recordTransaction(page, { type: 'Expense', envelope: 'Groceries', amount: '120' });
+    await recordTransaction(page, {
+      type: 'Income',
+      envelope: 'Groceries',
+      amount: '500',
+      name: 'Paycheck',
+    });
+    await recordTransaction(page, {
+      type: 'Expense',
+      envelope: 'Groceries',
+      amount: '120',
+      name: 'Supermarket run',
+    });
 
     await expectEnvelopeBalance(page, 'Groceries', '380.00');
   });
@@ -41,7 +56,7 @@ test.describe('Budget envelopes', () => {
       type: 'Income',
       envelope: 'Groceries',
       amount: '500',
-      description: 'Initial funding',
+      name: 'Initial funding',
     });
 
     const card = page.locator('[hlmCard]').filter({ hasText: 'Groceries' });
@@ -53,7 +68,7 @@ test.describe('Budget envelopes', () => {
     await page.getByRole('link', { name: 'Edit' }).click();
     await expect(page).toHaveURL(/\/budget\/transactions\/.+\/edit/);
     await page.getByLabel('Amount').fill('650');
-    await page.getByLabel('Description (optional)').fill('Adjusted funding');
+    await page.getByLabel('Name').fill('Adjusted funding');
     await page.getByRole('button', { name: 'Save changes' }).click();
 
     await expect(page).toHaveURL(/\/budget\/envelopes\/.+/);
@@ -70,7 +85,12 @@ test.describe('Budget envelopes', () => {
     await createEnvelope(page, 'Groceries');
     await createEnvelope(page, 'Fun money');
 
-    await recordTransaction(page, { type: 'Income', envelope: 'Groceries', amount: '500' });
+    await recordTransaction(page, {
+      type: 'Income',
+      envelope: 'Groceries',
+      amount: '500',
+      name: 'Paycheck',
+    });
     await transferFunds(page, { from: 'Groceries', to: 'Fun money', amount: '100' });
 
     const card = page.locator('[hlmCard]').filter({ hasText: 'Groceries' });
@@ -101,7 +121,12 @@ test.describe('Budget envelopes', () => {
     await createEnvelope(page, 'Groceries');
     await createEnvelope(page, 'Fun money');
 
-    await recordTransaction(page, { type: 'Income', envelope: 'Groceries', amount: '500' });
+    await recordTransaction(page, {
+      type: 'Income',
+      envelope: 'Groceries',
+      amount: '500',
+      name: 'Paycheck',
+    });
     await transferFunds(page, { from: 'Groceries', to: 'Fun money', amount: '100' });
 
     await expectEnvelopeBalance(page, 'Groceries', '400.00');
