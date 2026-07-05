@@ -92,6 +92,13 @@ export const routes: Routes = [
           import('./features/budget/transfer-form/transfer-form').then((m) => m.TransferForm),
       },
       {
+        path: 'budget/funding/new',
+        loadComponent: () =>
+          import('./features/budget/bulk-funding-form/bulk-funding-form').then(
+            (m) => m.BulkFundingForm,
+          ),
+      },
+      {
         path: 'budget/recurring/new',
         loadComponent: () =>
           import('./features/budget/recurring-rule-form/recurring-rule-form').then(
