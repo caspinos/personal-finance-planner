@@ -98,3 +98,9 @@ Project-specific config (see `components.json`):
 - Use the `providedIn: 'root'` option for singleton services
 - Prefer the `@Service` decorator over `@Injectable({providedIn: 'root'})` for new singleton services (Angular v22+)
 - Use the `inject()` function instead of constructor injection
+
+## Branches & Deployment
+
+- `main` — default development branch. `.github/workflows/ci.yml` runs build/unit tests and an e2e job against a local Supabase Docker stack (`npx supabase start`/`stop`) on push/PR. No deploy happens from `main`.
+- `prod` — separate branch that CI auto-deploys from: Cloudflare Workers (the app itself, via `wrangler`, config in `wrangler.jsonc`) and Supabase (the remote project, e.g. migrations). Promote to production by merging/PR-ing `main` into `prod`.
+- Production Supabase URL/anon key live in `src/environments/environment.ts` (committed — the anon/publishable key is safe to commit since access is enforced by Postgres RLS). `src/environments/environment.development.ts` holds local Docker Supabase values and must stay untouched by production config changes.
