@@ -16,6 +16,7 @@ import { AuthService } from '../../core/auth/auth.service';
           <a hlmBtn variant="ghost" size="sm" routerLink="/">Dashboard</a>
           <a hlmBtn variant="ghost" size="sm" routerLink="/budget">Budget</a>
           <a hlmBtn variant="ghost" size="sm" routerLink="/net-worth">Net worth</a>
+          <a hlmBtn variant="ghost" size="sm" routerLink="/household/members">Household</a>
         </nav>
         @if (auth.user(); as user) {
           <span class="text-muted-foreground ml-auto text-sm">{{ user.email }}</span>

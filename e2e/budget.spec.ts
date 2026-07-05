@@ -112,4 +112,27 @@ test.describe('Budget envelopes', () => {
     await expectEnvelopeBalance(page, 'Groceries', '400.00');
     await expectEnvelopeBalance(page, 'Fun money', '100.00');
   });
+
+  test('archives and unarchives an envelope from its history page', async ({ page }) => {
+    await createEnvelope(page, 'Old envelope');
+
+    const card = page.locator('[hlmCard]').filter({ hasText: 'Old envelope' });
+    await card.getByRole('link', { name: 'View history' }).click();
+    await expect(page).toHaveURL(/\/budget\/envelopes\/.+/);
+    const envelopeUrl = page.url();
+
+    await page.getByRole('button', { name: 'Archive envelope' }).click();
+    await expect(page.getByRole('button', { name: 'Unarchive envelope' })).toBeVisible();
+    await expect(page.getByText('Archived')).toBeVisible();
+
+    await page.goto('/budget');
+    await expect(page.getByText('No envelopes yet')).toBeVisible();
+
+    await page.goto(envelopeUrl);
+    await page.getByRole('button', { name: 'Unarchive envelope' }).click();
+    await expect(page.getByRole('button', { name: 'Archive envelope' })).toBeVisible();
+
+    await page.goto('/budget');
+    await expect(page.getByRole('heading', { name: 'Old envelope', exact: true })).toBeVisible();
+  });
 });

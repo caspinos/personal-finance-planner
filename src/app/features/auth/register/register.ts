@@ -1,6 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
@@ -81,7 +81,12 @@ import { AuthService } from '../../../core/auth/auth.service';
         <div hlmCardFooter class="justify-center">
           <p class="text-muted-foreground text-sm">
             Already have an account?
-            <a routerLink="/login" class="text-primary underline underline-offset-4">Log in</a>
+            <a
+              routerLink="/login"
+              [queryParams]="returnUrl() ? { returnUrl: returnUrl() } : {}"
+              class="text-primary underline underline-offset-4"
+              >Log in</a
+            >
           </p>
         </div>
       </div>
@@ -90,11 +95,14 @@ import { AuthService } from '../../../core/auth/auth.service';
 })
 export class Register {
   private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder);
 
   protected readonly submitting = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly registered = signal(false);
+  protected readonly returnUrl = signal(this.route.snapshot.queryParamMap.get('returnUrl'));
 
   protected readonly form = this.fb.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
@@ -110,12 +118,17 @@ export class Register {
     this.errorMessage.set(null);
 
     const { email, password } = this.form.getRawValue();
-    const { error } = await this.auth.signUp(email, password);
+    const { session, error } = await this.auth.signUp(email, password);
 
     this.submitting.set(false);
 
     if (error) {
       this.errorMessage.set(error.message);
+      return;
+    }
+
+    if (session) {
+      await this.router.navigateByUrl(this.returnUrl() ?? '/');
       return;
     }
 

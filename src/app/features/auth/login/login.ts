@@ -1,6 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
@@ -74,7 +74,12 @@ import { AuthService } from '../../../core/auth/auth.service';
         <div hlmCardFooter class="justify-center">
           <p class="text-muted-foreground text-sm">
             No account yet?
-            <a routerLink="/register" class="text-primary underline underline-offset-4">Register</a>
+            <a
+              routerLink="/register"
+              [queryParams]="returnUrl() ? { returnUrl: returnUrl() } : {}"
+              class="text-primary underline underline-offset-4"
+              >Register</a
+            >
           </p>
         </div>
       </div>
@@ -84,10 +89,12 @@ import { AuthService } from '../../../core/auth/auth.service';
 export class Login {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder);
 
   protected readonly submitting = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
+  protected readonly returnUrl = signal(this.route.snapshot.queryParamMap.get('returnUrl'));
 
   protected readonly form = this.fb.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
@@ -112,6 +119,6 @@ export class Login {
       return;
     }
 
-    await this.router.navigateByUrl('/');
+    await this.router.navigateByUrl(this.returnUrl() ?? '/');
   }
 }
