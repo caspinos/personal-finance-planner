@@ -6,6 +6,7 @@ import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 import {
   AssetHolding,
@@ -24,6 +25,7 @@ import {
     HlmButtonImports,
     HlmCardImports,
     HlmSpinnerImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex flex-col gap-6">
@@ -31,14 +33,17 @@ import {
         <div class="flex flex-col gap-2">
           @if (holding(); as holding) {
             <a hlmBtn variant="ghost" size="sm" [routerLink]="['/net-worth/accounts', holding.asset_account_id]">
-              Back to account
+              {{ 'holdingHistory.backToAccount' | transloco }}
             </a>
           }
           <div>
-            <h1 class="text-2xl font-semibold">{{ holding()?.name ?? 'Holding history' }}</h1>
+            <h1 class="text-2xl font-semibold">
+              {{ holding()?.name ?? ('holdingHistory.defaultTitle' | transloco) }}
+            </h1>
             <p class="text-muted-foreground text-sm">
               @if (holding(); as holding) {
-                {{ holding.ticker || 'No ticker' }} &middot; {{ holding.currency }}
+                {{ holding.ticker || ('holdingHistory.noTicker' | transloco) }} &middot;
+                {{ holding.currency }}
               }
             </p>
           </div>
@@ -50,48 +55,48 @@ import {
           routerLink="/net-worth/holdings/transactions/new"
           [queryParams]="{ holdingId: holdingId() }"
         >
-          Record transaction
+          {{ 'holdingHistory.recordTransaction' | transloco }}
         </a>
       </div>
 
       @if (errorMessage()) {
         <div hlmAlert variant="destructive">
-          <p hlmAlertTitle>Couldn't load holding history</p>
+          <p hlmAlertTitle>{{ 'holdingHistory.loadErrorTitle' | transloco }}</p>
           <p hlmAlertDescription>{{ errorMessage() }}</p>
         </div>
       }
 
       <div hlmCard>
         <div hlmCardHeader>
-          <h2 hlmCardTitle>Position</h2>
-          <p hlmCardDescription>Derived from all buy/sell transactions to date.</p>
+          <h2 hlmCardTitle>{{ 'holdingHistory.positionTitle' | transloco }}</h2>
+          <p hlmCardDescription>{{ 'holdingHistory.positionDescription' | transloco }}</p>
         </div>
         <div hlmCardContent>
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Loading position...
+              {{ 'holdingHistory.loadingPosition' | transloco }}
             </div>
           } @else if (position(); as position) {
             <div class="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
               <div>
-                <p class="text-muted-foreground text-sm">Quantity</p>
+                <p class="text-muted-foreground text-sm">{{ 'holdingHistory.quantity' | transloco }}</p>
                 <p class="text-xl font-semibold">{{ position.quantity | number: '1.0-6' }}</p>
               </div>
               <div>
-                <p class="text-muted-foreground text-sm">Average cost</p>
+                <p class="text-muted-foreground text-sm">{{ 'holdingHistory.averageCost' | transloco }}</p>
                 <p class="text-xl font-semibold">
                   {{ position.average_cost | number: '1.2-4' }} {{ holding()?.currency }}
                 </p>
               </div>
               <div>
-                <p class="text-muted-foreground text-sm">Market value</p>
+                <p class="text-muted-foreground text-sm">{{ 'holdingHistory.marketValue' | transloco }}</p>
                 <p class="text-xl font-semibold">
                   {{ position.market_value | number: '1.2-2' }} {{ holding()?.currency }}
                 </p>
               </div>
               <div>
-                <p class="text-muted-foreground text-sm">Unrealized gain</p>
+                <p class="text-muted-foreground text-sm">{{ 'holdingHistory.unrealizedGain' | transloco }}</p>
                 <p
                   class="text-xl font-semibold"
                   [class.text-destructive]="position.unrealized_gain < 0"
@@ -101,24 +106,24 @@ import {
               </div>
             </div>
           } @else {
-            <p class="text-muted-foreground text-sm">No transactions recorded yet.</p>
+            <p class="text-muted-foreground text-sm">{{ 'holdingHistory.noTransactionsYet' | transloco }}</p>
           }
         </div>
       </div>
 
       <div hlmCard>
         <div hlmCardHeader>
-          <h2 hlmCardTitle>Transactions</h2>
-          <p hlmCardDescription>Every buy/sell event recorded for this holding.</p>
+          <h2 hlmCardTitle>{{ 'holdingHistory.transactionsTitle' | transloco }}</h2>
+          <p hlmCardDescription>{{ 'holdingHistory.transactionsDescription' | transloco }}</p>
         </div>
         <div hlmCardContent>
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Loading transactions...
+              {{ 'holdingHistory.loadingTransactions' | transloco }}
             </div>
           } @else if (transactions().length === 0) {
-            <p class="text-muted-foreground text-sm">No transactions recorded yet.</p>
+            <p class="text-muted-foreground text-sm">{{ 'holdingHistory.noTransactionsYet' | transloco }}</p>
           } @else {
             <ul class="flex flex-col gap-3">
               @for (transaction of transactions(); track transaction.id) {
@@ -128,7 +133,10 @@ import {
                   <div class="flex min-w-0 flex-col gap-1">
                     <div class="flex flex-wrap items-center gap-2">
                       <span class="font-medium">
-                        {{ transaction.type === 'buy' ? 'Buy' : 'Sell' }}
+                        {{
+                          (transaction.type === 'buy' ? 'holdingHistory.buy' : 'holdingHistory.sell')
+                            | transloco
+                        }}
                         {{ transaction.quantity | number: '1.0-6' }} @
                         {{ transaction.price_per_unit | number: '1.2-4' }}
                       </span>
@@ -137,9 +145,10 @@ import {
                       </span>
                     </div>
                     <p class="text-muted-foreground truncate text-sm">
-                      {{ transaction.note || 'No note' }}
+                      {{ transaction.note || ('holdingHistory.noNote' | transloco) }}
                       @if (transaction.fee) {
-                        &middot; Fee {{ transaction.fee | number: '1.2-2' }}
+                        &middot;
+                        {{ 'holdingHistory.fee' | transloco: { fee: (transaction.fee | number: '1.2-2') } }}
                       }
                     </p>
                   </div>
@@ -151,7 +160,7 @@ import {
                       size="sm"
                       [routerLink]="['/net-worth/holdings/transactions', transaction.id, 'edit']"
                     >
-                      Edit
+                      {{ 'common.edit' | transloco }}
                     </a>
                     <button
                       hlmBtn
@@ -164,7 +173,7 @@ import {
                       @if (deletingId() === transaction.id) {
                         <hlm-spinner />
                       }
-                      Delete
+                      {{ 'common.delete' | transloco }}
                     </button>
                   </div>
                 </li>
@@ -180,6 +189,7 @@ export class HoldingHistory {
   private readonly netWorth = inject(NetWorthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly transloco = inject(TranslocoService);
 
   protected readonly holding = signal<AssetHolding | null>(null);
   protected readonly transactions = signal<AssetTransaction[]>([]);
@@ -195,7 +205,7 @@ export class HoldingHistory {
   }
 
   protected async deleteTransaction(transaction: AssetTransaction): Promise<void> {
-    const confirmed = window.confirm('Delete this transaction? This cannot be undone.');
+    const confirmed = window.confirm(this.transloco.translate('holdingHistory.deleteTransactionConfirm'));
     if (!confirmed) {
       return;
     }

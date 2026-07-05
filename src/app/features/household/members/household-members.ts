@@ -9,6 +9,7 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 import { AuthService } from '../../../core/auth/auth.service';
 import {
@@ -18,10 +19,10 @@ import {
   HouseholdService,
 } from '../../../core/household/household.service';
 
-const ROLES: Array<{ value: HouseholdRole; label: string }> = [
-  { value: 'owner', label: 'Owner' },
-  { value: 'editor', label: 'Editor' },
-  { value: 'viewer', label: 'Viewer' },
+const ROLES: Array<{ value: HouseholdRole; labelKey: string }> = [
+  { value: 'owner', labelKey: 'householdMembers.roleOption.owner' },
+  { value: 'editor', labelKey: 'householdMembers.roleOption.editor' },
+  { value: 'viewer', labelKey: 'householdMembers.roleOption.viewer' },
 ];
 
 @Component({
@@ -36,11 +37,12 @@ const ROLES: Array<{ value: HouseholdRole; label: string }> = [
     HlmInputImports,
     HlmSelectImports,
     HlmSpinnerImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex flex-col gap-6">
       <div>
-        <h1 class="text-2xl font-semibold">Household members</h1>
+        <h1 class="text-2xl font-semibold">{{ 'householdMembers.title' | transloco }}</h1>
         <p class="text-muted-foreground text-sm">
           {{ households.currentHousehold()?.name }}
         </p>
@@ -48,21 +50,21 @@ const ROLES: Array<{ value: HouseholdRole; label: string }> = [
 
       @if (errorMessage()) {
         <div hlmAlert variant="destructive">
-          <p hlmAlertTitle>Something went wrong</p>
+          <p hlmAlertTitle>{{ 'common.somethingWentWrong' | transloco }}</p>
           <p hlmAlertDescription>{{ errorMessage() }}</p>
         </div>
       }
 
       <div hlmCard>
         <div hlmCardHeader>
-          <h2 hlmCardTitle>Members</h2>
-          <p hlmCardDescription>Everyone with access to this household's data.</p>
+          <h2 hlmCardTitle>{{ 'householdMembers.membersTitle' | transloco }}</h2>
+          <p hlmCardDescription>{{ 'householdMembers.membersDescription' | transloco }}</p>
         </div>
         <div hlmCardContent>
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Loading members...
+              {{ 'householdMembers.loadingMembers' | transloco }}
             </div>
           } @else {
             <ul class="flex flex-col gap-3">
@@ -74,11 +76,16 @@ const ROLES: Array<{ value: HouseholdRole; label: string }> = [
                     <span class="font-medium">
                       {{ member.email }}
                       @if (member.user_id === currentUserId()) {
-                        <span class="text-muted-foreground text-sm">(you)</span>
+                        <span class="text-muted-foreground text-sm">{{
+                          'householdMembers.you' | transloco
+                        }}</span>
                       }
                     </span>
                     <span class="text-muted-foreground text-sm">
-                      Member since {{ member.created_at | date: 'mediumDate' }}
+                      {{
+                        'householdMembers.memberSince'
+                          | transloco: { date: (member.created_at | date: 'mediumDate') }
+                      }}
                     </span>
                   </div>
 
@@ -95,7 +102,7 @@ const ROLES: Array<{ value: HouseholdRole; label: string }> = [
                         <hlm-select-content *hlmSelectPortal>
                           @for (option of roles; track option.value) {
                             <hlm-select-item [value]="option.value">
-                              {{ option.label }}
+                              {{ option.labelKey | transloco }}
                             </hlm-select-item>
                           }
                         </hlm-select-content>
@@ -111,7 +118,7 @@ const ROLES: Array<{ value: HouseholdRole; label: string }> = [
                         @if (busyUserId() === member.user_id) {
                           <hlm-spinner />
                         }
-                        Remove
+                        {{ 'householdMembers.remove' | transloco }}
                       </button>
                     } @else {
                       <span class="text-muted-foreground text-sm">{{ roleToString(member.role) }}</span>
@@ -127,16 +134,16 @@ const ROLES: Array<{ value: HouseholdRole; label: string }> = [
       @if (isOwner()) {
         <div hlmCard>
           <div hlmCardHeader>
-            <h2 hlmCardTitle>Invite someone</h2>
+            <h2 hlmCardTitle>{{ 'householdMembers.inviteTitle' | transloco }}</h2>
             <p hlmCardDescription>
-              Generates a link you can share directly &mdash; no email is sent automatically.
+              {{ 'householdMembers.inviteDescription' | transloco }}
             </p>
           </div>
           <div hlmCardContent class="flex flex-col gap-4">
             <form [formGroup]="inviteForm" (ngSubmit)="submitInvite()" novalidate class="flex flex-col gap-4">
               <div class="flex flex-col gap-4 sm:flex-row">
                 <div hlmField class="flex-1">
-                  <label hlmFieldLabel for="inviteEmail">Email</label>
+                  <label hlmFieldLabel for="inviteEmail">{{ 'householdMembers.email' | transloco }}</label>
                   <input
                     hlmInput
                     id="inviteEmail"
@@ -145,12 +152,14 @@ const ROLES: Array<{ value: HouseholdRole; label: string }> = [
                     autocomplete="off"
                   />
                   @if (inviteForm.controls.email.invalid && inviteForm.controls.email.touched) {
-                    <hlm-field-error forceShow>Enter a valid email address.</hlm-field-error>
+                    <hlm-field-error forceShow>{{
+                      'householdMembers.emailError' | transloco
+                    }}</hlm-field-error>
                   }
                 </div>
 
                 <div hlmField class="w-full sm:w-40">
-                  <label hlmFieldLabel>Role</label>
+                  <label hlmFieldLabel>{{ 'householdMembers.role' | transloco }}</label>
                   <hlm-select
                     [value]="inviteRole()"
                     (valueChange)="onInviteRoleChange($event)"
@@ -161,7 +170,9 @@ const ROLES: Array<{ value: HouseholdRole; label: string }> = [
                     </hlm-select-trigger>
                     <hlm-select-content *hlmSelectPortal>
                       @for (option of roles; track option.value) {
-                        <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
+                        <hlm-select-item [value]="option.value">{{
+                          option.labelKey | transloco
+                        }}</hlm-select-item>
                       }
                     </hlm-select-content>
                   </hlm-select>
@@ -172,17 +183,19 @@ const ROLES: Array<{ value: HouseholdRole; label: string }> = [
                 @if (inviting()) {
                   <hlm-spinner />
                 }
-                Create invite link
+                {{ 'householdMembers.createInviteLink' | transloco }}
               </button>
             </form>
 
             @if (lastInviteLink()) {
               <div class="border-border flex flex-col gap-2 rounded-md border p-4">
-                <p class="text-sm font-medium">Share this link with {{ lastInviteEmail() }}:</p>
+                <p class="text-sm font-medium">
+                  {{ 'householdMembers.shareLink' | transloco: { email: lastInviteEmail() } }}
+                </p>
                 <div class="flex flex-wrap items-center gap-2">
                   <code class="bg-muted rounded px-2 py-1 text-xs break-all">{{ lastInviteLink() }}</code>
                   <button hlmBtn variant="outline" size="sm" type="button" (click)="copyLink(lastInviteLink()!)">
-                    {{ copied() ? 'Copied!' : 'Copy link' }}
+                    {{ (copied() ? 'householdMembers.copied' : 'householdMembers.copyLink') | transloco }}
                   </button>
                 </div>
               </div>
@@ -192,12 +205,12 @@ const ROLES: Array<{ value: HouseholdRole; label: string }> = [
 
         <div hlmCard>
           <div hlmCardHeader>
-            <h2 hlmCardTitle>Pending invites</h2>
-            <p hlmCardDescription>Invites that haven't been accepted yet.</p>
+            <h2 hlmCardTitle>{{ 'householdMembers.pendingInvitesTitle' | transloco }}</h2>
+            <p hlmCardDescription>{{ 'householdMembers.pendingInvitesDescription' | transloco }}</p>
           </div>
           <div hlmCardContent>
             @if (invites().length === 0) {
-              <p class="text-muted-foreground text-sm">No pending invites.</p>
+              <p class="text-muted-foreground text-sm">{{ 'householdMembers.noPendingInvites' | transloco }}</p>
             } @else {
               <ul class="flex flex-col gap-3">
                 @for (invite of invites(); track invite.id) {
@@ -207,8 +220,14 @@ const ROLES: Array<{ value: HouseholdRole; label: string }> = [
                     <div class="flex min-w-0 flex-col">
                       <span class="font-medium">{{ invite.email }}</span>
                       <span class="text-muted-foreground text-sm">
-                        {{ roleToString(invite.role) }} &middot; expires
-                        {{ invite.expires_at | date: 'mediumDate' }}
+                        {{
+                          'householdMembers.expiresOn'
+                            | transloco
+                              : {
+                                  role: roleToString(invite.role),
+                                  date: (invite.expires_at | date: 'mediumDate'),
+                                }
+                        }}
                       </span>
                     </div>
 
@@ -220,7 +239,7 @@ const ROLES: Array<{ value: HouseholdRole; label: string }> = [
                         type="button"
                         (click)="copyLink(inviteLink(invite))"
                       >
-                        Copy link
+                        {{ 'householdMembers.copyLink' | transloco }}
                       </button>
                       <button
                         hlmBtn
@@ -233,7 +252,7 @@ const ROLES: Array<{ value: HouseholdRole; label: string }> = [
                         @if (revokingId() === invite.id) {
                           <hlm-spinner />
                         }
-                        Revoke
+                        {{ 'householdMembers.revoke' | transloco }}
                       </button>
                     </div>
                   </li>
@@ -250,6 +269,7 @@ export class HouseholdMembers {
   protected readonly households = inject(HouseholdService);
   private readonly auth = inject(AuthService);
   private readonly fb = inject(FormBuilder);
+  private readonly transloco = inject(TranslocoService);
 
   protected readonly roles = ROLES;
   protected readonly loading = signal(true);
@@ -275,8 +295,10 @@ export class HouseholdMembers {
     void this.loadAll();
   }
 
-  protected readonly roleToString = (role: HouseholdRole): string =>
-    ROLES.find((option) => option.value === role)?.label ?? role;
+  protected readonly roleToString = (role: HouseholdRole): string => {
+    const key = ROLES.find((option) => option.value === role)?.labelKey;
+    return key ? this.transloco.translate(key) : role;
+  };
 
   protected onInviteRoleChange(value: HouseholdRole | HouseholdRole[] | null | undefined): void {
     if (typeof value === 'string') {
@@ -315,7 +337,9 @@ export class HouseholdMembers {
   }
 
   protected async remove(member: HouseholdMember): Promise<void> {
-    const confirmed = window.confirm(`Remove ${member.email} from this household?`);
+    const confirmed = window.confirm(
+      this.transloco.translate('householdMembers.removeConfirm', { email: member.email }),
+    );
     if (!confirmed) {
       return;
     }

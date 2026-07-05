@@ -8,8 +8,10 @@ import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 import { HouseholdService } from '../../core/household/household.service';
+import { FrankfurterService } from '../../core/rates/frankfurter.service';
 import { CommodityPrice, ExchangeRate, RatesService } from '../../core/rates/rates.service';
 
 @Component({
@@ -24,37 +26,36 @@ import { CommodityPrice, ExchangeRate, RatesService } from '../../core/rates/rat
     HlmFieldImports,
     HlmInputImports,
     HlmSpinnerImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex flex-col gap-6">
       <div>
-        <h1 class="text-2xl font-semibold">Rates</h1>
+        <h1 class="text-2xl font-semibold">{{ 'rates.title' | transloco }}</h1>
         <p class="text-muted-foreground text-sm">
-          Manage the household's base currency and manual exchange rate / commodity price
-          history.
+          {{ 'rates.subtitle' | transloco }}
         </p>
       </div>
 
       @if (errorMessage()) {
         <div hlmAlert variant="destructive">
-          <p hlmAlertTitle>Couldn't load rates</p>
+          <p hlmAlertTitle>{{ 'rates.loadErrorTitle' | transloco }}</p>
           <p hlmAlertDescription>{{ errorMessage() }}</p>
         </div>
       }
 
       <div hlmCard class="max-w-md">
         <div hlmCardHeader>
-          <h2 hlmCardTitle>Base currency</h2>
+          <h2 hlmCardTitle>{{ 'rates.baseCurrency' | transloco }}</h2>
           <p hlmCardDescription>
-            Net worth and budget totals are converted into this currency where a rate is
-            available.
+            {{ 'rates.baseCurrencyDescription' | transloco }}
           </p>
         </div>
         <div hlmCardContent>
           @if (isOwner()) {
             <div class="flex items-end gap-2">
               <div hlmField class="w-32">
-                <label hlmFieldLabel for="baseCurrency">Base currency</label>
+                <label hlmFieldLabel for="baseCurrency">{{ 'rates.baseCurrency' | transloco }}</label>
                 <input
                   hlmInput
                   id="baseCurrency"
@@ -74,7 +75,7 @@ import { CommodityPrice, ExchangeRate, RatesService } from '../../core/rates/rat
                 @if (savingBaseCurrency()) {
                   <hlm-spinner />
                 }
-                Save
+                {{ 'common.save' | transloco }}
               </button>
             </div>
           } @else {
@@ -86,23 +87,46 @@ import { CommodityPrice, ExchangeRate, RatesService } from '../../core/rates/rat
       <div hlmCard>
         <div hlmCardHeader class="flex flex-row flex-wrap items-start justify-between gap-2">
           <div>
-            <h2 hlmCardTitle>Exchange rates</h2>
-            <p hlmCardDescription>1 unit of a currency, expressed in PLN, as of a date.</p>
+            <h2 hlmCardTitle>{{ 'rates.exchangeRatesTitle' | transloco }}</h2>
+            <p hlmCardDescription>{{ 'rates.exchangeRatesDescription' | transloco }}</p>
           </div>
           @if (canEdit()) {
-            <a hlmBtn variant="outline" size="sm" routerLink="/rates/exchange-rates/new">
-              New rate
-            </a>
+            <div class="flex flex-wrap gap-2">
+              @if (trackedCurrencies().length > 0) {
+                <button
+                  hlmBtn
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  [disabled]="syncingRates()"
+                  (click)="syncRatesFromFrankfurter()"
+                >
+                  @if (syncingRates()) {
+                    <hlm-spinner />
+                  }
+                  {{ 'rates.syncFromFrankfurter' | transloco }}
+                </button>
+              }
+              <a hlmBtn variant="outline" size="sm" routerLink="/rates/exchange-rates/new">
+                {{ 'rates.newRate' | transloco }}
+              </a>
+            </div>
           }
         </div>
         <div hlmCardContent>
+          @if (syncError()) {
+            <div hlmAlert variant="destructive" class="mb-4">
+              <p hlmAlertTitle>{{ 'rates.syncErrorTitle' | transloco }}</p>
+              <p hlmAlertDescription>{{ syncError() }}</p>
+            </div>
+          }
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Loading exchange rates...
+              {{ 'rates.loadingExchangeRates' | transloco }}
             </div>
           } @else if (exchangeRates().length === 0) {
-            <p class="text-muted-foreground text-sm">No exchange rates yet.</p>
+            <p class="text-muted-foreground text-sm">{{ 'rates.noExchangeRates' | transloco }}</p>
           } @else {
             <ul class="flex flex-col gap-3">
               @for (rate of exchangeRates(); track rate.id) {
@@ -132,7 +156,7 @@ import { CommodityPrice, ExchangeRate, RatesService } from '../../core/rates/rat
                         size="sm"
                         [routerLink]="['/rates/exchange-rates', rate.id, 'edit']"
                       >
-                        Edit
+                        {{ 'common.edit' | transloco }}
                       </a>
                       <button
                         hlmBtn
@@ -145,7 +169,7 @@ import { CommodityPrice, ExchangeRate, RatesService } from '../../core/rates/rat
                         @if (deletingRateId() === rate.id) {
                           <hlm-spinner />
                         }
-                        Delete
+                        {{ 'common.delete' | transloco }}
                       </button>
                     </div>
                   }
@@ -159,12 +183,12 @@ import { CommodityPrice, ExchangeRate, RatesService } from '../../core/rates/rat
       <div hlmCard>
         <div hlmCardHeader class="flex flex-row flex-wrap items-start justify-between gap-2">
           <div>
-            <h2 hlmCardTitle>Commodity prices</h2>
-            <p hlmCardDescription>Manual price log for reference (e.g. gold).</p>
+            <h2 hlmCardTitle>{{ 'rates.commodityPricesTitle' | transloco }}</h2>
+            <p hlmCardDescription>{{ 'rates.commodityPricesDescription' | transloco }}</p>
           </div>
           @if (canEdit()) {
             <a hlmBtn variant="outline" size="sm" routerLink="/rates/commodity-prices/new">
-              New price
+              {{ 'rates.newPrice' | transloco }}
             </a>
           }
         </div>
@@ -172,10 +196,10 @@ import { CommodityPrice, ExchangeRate, RatesService } from '../../core/rates/rat
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Loading commodity prices...
+              {{ 'rates.loadingCommodityPrices' | transloco }}
             </div>
           } @else if (commodityPrices().length === 0) {
-            <p class="text-muted-foreground text-sm">No commodity prices yet.</p>
+            <p class="text-muted-foreground text-sm">{{ 'rates.noCommodityPrices' | transloco }}</p>
           } @else {
             <ul class="flex flex-col gap-3">
               @for (price of commodityPrices(); track price.id) {
@@ -205,7 +229,7 @@ import { CommodityPrice, ExchangeRate, RatesService } from '../../core/rates/rat
                         size="sm"
                         [routerLink]="['/rates/commodity-prices', price.id, 'edit']"
                       >
-                        Edit
+                        {{ 'common.edit' | transloco }}
                       </a>
                       <button
                         hlmBtn
@@ -218,7 +242,7 @@ import { CommodityPrice, ExchangeRate, RatesService } from '../../core/rates/rat
                         @if (deletingPriceId() === price.id) {
                           <hlm-spinner />
                         }
-                        Delete
+                        {{ 'common.delete' | transloco }}
                       </button>
                     </div>
                   }
@@ -233,17 +257,24 @@ import { CommodityPrice, ExchangeRate, RatesService } from '../../core/rates/rat
 })
 export class Rates {
   protected readonly rates = inject(RatesService);
+  private readonly frankfurter = inject(FrankfurterService);
   private readonly households = inject(HouseholdService);
+  private readonly transloco = inject(TranslocoService);
 
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly savingBaseCurrency = signal(false);
   protected readonly deletingRateId = signal<string | null>(null);
   protected readonly deletingPriceId = signal<string | null>(null);
+  protected readonly syncingRates = signal(false);
+  protected readonly syncError = signal<string | null>(null);
   protected readonly baseCurrencyInput = signal('PLN');
 
   protected readonly exchangeRates = this.rates.exchangeRates;
   protected readonly commodityPrices = this.rates.commodityPrices;
+  protected readonly trackedCurrencies = computed(() => [
+    ...new Set(this.exchangeRates().map((rate) => rate.currency)),
+  ]);
   protected readonly baseCurrency = computed(
     () => this.households.currentHousehold()?.base_currency ?? 'PLN',
   );
@@ -280,8 +311,47 @@ export class Rates {
     }
   }
 
+  protected async syncRatesFromFrankfurter(): Promise<void> {
+    if (this.syncingRates()) {
+      return;
+    }
+
+    this.syncingRates.set(true);
+    this.syncError.set(null);
+
+    const currencies = this.trackedCurrencies();
+    const failures: string[] = [];
+
+    for (const currency of currencies) {
+      try {
+        const rateToPln = await this.frankfurter.fetchRateToPln(currency, new Date());
+        await this.rates.createExchangeRate({
+          currency,
+          rateToPln,
+          rateDate: new Date(),
+          source: 'frankfurter.dev',
+        });
+      } catch {
+        failures.push(currency);
+      }
+    }
+
+    if (failures.length > 0) {
+      this.syncError.set(
+        this.transloco.translate('rates.syncFailure', { currencies: failures.join(', ') }),
+      );
+    }
+
+    this.syncingRates.set(false);
+  }
+
   protected async deleteExchangeRate(rate: ExchangeRate): Promise<void> {
-    const confirmed = window.confirm(`Delete the ${rate.currency} rate for ${rate.rate_date}?`);
+    const confirmed = window.confirm(
+      this.transloco.translate('rates.deleteExchangeRateConfirm', {
+        currency: rate.currency,
+        date: rate.rate_date,
+      }),
+    );
     if (!confirmed) {
       return;
     }
@@ -299,7 +369,12 @@ export class Rates {
   }
 
   protected async deleteCommodityPrice(price: CommodityPrice): Promise<void> {
-    const confirmed = window.confirm(`Delete the ${price.commodity} price for ${price.price_date}?`);
+    const confirmed = window.confirm(
+      this.transloco.translate('rates.deleteCommodityPriceConfirm', {
+        commodity: price.commodity,
+        date: price.price_date,
+      }),
+    );
     if (!confirmed) {
       return;
     }

@@ -5,32 +5,42 @@ import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 import { HouseholdService } from '../../../core/household/household.service';
 
 @Component({
   selector: 'app-accept-invite',
-  imports: [RouterLink, HlmAlertImports, HlmButtonImports, HlmCardImports, HlmSpinnerImports],
+  imports: [
+    RouterLink,
+    HlmAlertImports,
+    HlmButtonImports,
+    HlmCardImports,
+    HlmSpinnerImports,
+    TranslocoModule,
+  ],
   template: `
     <div class="flex min-h-svh items-center justify-center p-6">
       <div hlmCard class="w-full max-w-sm">
         <div hlmCardHeader>
-          <h1 hlmCardTitle>Joining household</h1>
-          <p hlmCardDescription>Redeeming your invite link.</p>
+          <h1 hlmCardTitle>{{ 'acceptInvite.title' | transloco }}</h1>
+          <p hlmCardDescription>{{ 'acceptInvite.description' | transloco }}</p>
         </div>
 
         <div hlmCardContent class="flex flex-col gap-4">
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Accepting invite...
+              {{ 'acceptInvite.accepting' | transloco }}
             </div>
           } @else if (errorMessage()) {
             <div hlmAlert variant="destructive">
-              <p hlmAlertTitle>Couldn't accept this invite</p>
+              <p hlmAlertTitle>{{ 'acceptInvite.errorTitle' | transloco }}</p>
               <p hlmAlertDescription>{{ errorMessage() }}</p>
             </div>
-            <a hlmBtn variant="outline" size="sm" routerLink="/">Back to dashboard</a>
+            <a hlmBtn variant="outline" size="sm" routerLink="/">{{
+              'acceptInvite.backToDashboard' | transloco
+            }}</a>
           }
         </div>
       </div>
@@ -41,6 +51,7 @@ export class AcceptInvite {
   private readonly households = inject(HouseholdService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly transloco = inject(TranslocoService);
 
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
@@ -54,7 +65,7 @@ export class AcceptInvite {
 
     if (!token) {
       this.loading.set(false);
-      this.errorMessage.set('This invite link is missing a token.');
+      this.errorMessage.set(this.transloco.translate('acceptInvite.missingToken'));
       return;
     }
 

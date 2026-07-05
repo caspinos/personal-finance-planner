@@ -8,6 +8,7 @@ import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { TranslocoModule } from '@jsverse/transloco';
 
 import { RatesService } from '../../../core/rates/rates.service';
 
@@ -28,40 +29,54 @@ function toDateInputValue(date: Date): string {
     HlmFieldImports,
     HlmInputImports,
     HlmSpinnerImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex min-h-svh items-center justify-center p-6">
       <div hlmCard class="w-full max-w-lg">
         <div hlmCardHeader>
-          <h1 hlmCardTitle>{{ title() }}</h1>
-          <p hlmCardDescription>{{ description() }}</p>
+          <h1 hlmCardTitle>
+            {{
+              (isEditing() ? 'commodityPriceForm.editTitle' : 'commodityPriceForm.newTitle')
+                | transloco
+            }}
+          </h1>
+          <p hlmCardDescription>
+            {{
+              (isEditing()
+                ? 'commodityPriceForm.editDescription'
+                : 'commodityPriceForm.newDescription') | transloco
+            }}
+          </p>
         </div>
 
         <div hlmCardContent>
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Loading price...
+              {{ 'commodityPriceForm.loading' | transloco }}
             </div>
           } @else {
             <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="flex flex-col gap-4">
               <div hlmField>
-                <label hlmFieldLabel for="commodity">Commodity</label>
+                <label hlmFieldLabel for="commodity">{{ 'commodityPriceForm.commodity' | transloco }}</label>
                 <input
                   hlmInput
                   id="commodity"
                   type="text"
-                  placeholder="e.g. Gold (oz)"
+                  [placeholder]="'commodityPriceForm.commodityPlaceholder' | transloco"
                   formControlName="commodity"
                 />
                 @if (form.controls.commodity.invalid && form.controls.commodity.touched) {
-                  <hlm-field-error forceShow>Enter a commodity name.</hlm-field-error>
+                  <hlm-field-error forceShow>{{
+                    'commodityPriceForm.commodityError' | transloco
+                  }}</hlm-field-error>
                 }
               </div>
 
               <div class="grid gap-4 sm:grid-cols-2">
                 <div hlmField>
-                  <label hlmFieldLabel for="price">Price</label>
+                  <label hlmFieldLabel for="price">{{ 'commodityPriceForm.price' | transloco }}</label>
                   <input
                     hlmInput
                     id="price"
@@ -71,12 +86,14 @@ function toDateInputValue(date: Date): string {
                     formControlName="price"
                   />
                   @if (form.controls.price.invalid && form.controls.price.touched) {
-                    <hlm-field-error forceShow>Enter a price of 0 or more.</hlm-field-error>
+                    <hlm-field-error forceShow>{{
+                      'commodityPriceForm.priceError' | transloco
+                    }}</hlm-field-error>
                   }
                 </div>
 
                 <div hlmField>
-                  <label hlmFieldLabel for="currency">Currency</label>
+                  <label hlmFieldLabel for="currency">{{ 'commodityPriceForm.currency' | transloco }}</label>
                   <input
                     hlmInput
                     id="currency"
@@ -85,29 +102,31 @@ function toDateInputValue(date: Date): string {
                     formControlName="currency"
                   />
                   @if (form.controls.currency.invalid && form.controls.currency.touched) {
-                    <hlm-field-error forceShow>Enter a 3-letter currency code.</hlm-field-error>
+                    <hlm-field-error forceShow>{{
+                      'commodityPriceForm.currencyError' | transloco
+                    }}</hlm-field-error>
                   }
                 </div>
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="priceDate">Price date</label>
+                <label hlmFieldLabel for="priceDate">{{ 'commodityPriceForm.priceDate' | transloco }}</label>
                 <input hlmInput id="priceDate" type="date" formControlName="priceDate" />
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="source">Source (optional)</label>
+                <label hlmFieldLabel for="source">{{ 'commodityPriceForm.source' | transloco }}</label>
                 <input hlmInput id="source" type="text" formControlName="source" />
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="note">Note (optional)</label>
+                <label hlmFieldLabel for="note">{{ 'commodityPriceForm.note' | transloco }}</label>
                 <input hlmInput id="note" type="text" formControlName="note" />
               </div>
 
               @if (errorMessage()) {
                 <div hlmAlert variant="destructive">
-                  <p hlmAlertTitle>Couldn't save the price</p>
+                  <p hlmAlertTitle>{{ 'commodityPriceForm.errorTitle' | transloco }}</p>
                   <p hlmAlertDescription>{{ errorMessage() }}</p>
                 </div>
               }
@@ -115,8 +134,13 @@ function toDateInputValue(date: Date): string {
               <button hlmBtn type="submit" [disabled]="form.invalid || submitting()">
                 @if (submitting()) {
                   <hlm-spinner />
+                  {{ 'common.saving' | transloco }}
+                } @else {
+                  {{
+                    (isEditing() ? 'commodityPriceForm.saveChanges' : 'commodityPriceForm.savePrice')
+                      | transloco
+                  }}
                 }
-                {{ submitting() ? 'Saving...' : submitLabel() }}
               </button>
             </form>
           }
@@ -136,17 +160,6 @@ export class CommodityPriceForm {
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly priceId = signal<string | null>(this.route.snapshot.paramMap.get('id'));
   protected readonly isEditing = computed(() => this.priceId() !== null);
-  protected readonly title = computed(() =>
-    this.isEditing() ? 'Edit commodity price' : 'New commodity price',
-  );
-  protected readonly description = computed(() =>
-    this.isEditing()
-      ? 'Update this dated commodity price.'
-      : 'Record a dated reference price for a commodity (e.g. gold).',
-  );
-  protected readonly submitLabel = computed(() =>
-    this.isEditing() ? 'Save changes' : 'Save price',
-  );
 
   protected readonly form = this.fb.nonNullable.group({
     commodity: ['', [Validators.required, Validators.minLength(2)]],

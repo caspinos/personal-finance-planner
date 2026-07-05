@@ -6,6 +6,7 @@ import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 import { AssetAccount, AssetValuation, HoldingPosition, NetWorthService } from '../../../core/net-worth/net-worth.service';
 
@@ -19,19 +20,24 @@ import { AssetAccount, AssetValuation, HoldingPosition, NetWorthService } from '
     HlmButtonImports,
     HlmCardImports,
     HlmSpinnerImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex flex-col gap-6">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="flex flex-col gap-2">
-          <a hlmBtn variant="ghost" size="sm" routerLink="/net-worth">Back to net worth</a>
+          <a hlmBtn variant="ghost" size="sm" routerLink="/net-worth">{{
+            'accountHistory.backToNetWorth' | transloco
+          }}</a>
           <div>
-            <h1 class="text-2xl font-semibold">{{ account()?.name ?? 'Account history' }}</h1>
+            <h1 class="text-2xl font-semibold">
+              {{ account()?.name ?? ('accountHistory.defaultTitle' | transloco) }}
+            </h1>
             <p class="text-muted-foreground text-sm">
               @if (account(); as account) {
                 {{ accountTypeLabel(account.type) }} &middot; {{ account.currency }}
                 @if (account.archived) {
-                  &middot; Archived
+                  &middot; {{ 'accountHistory.archived' | transloco }}
                 }
               }
             </p>
@@ -51,7 +57,11 @@ import { AssetAccount, AssetValuation, HoldingPosition, NetWorthService } from '
               @if (archiving()) {
                 <hlm-spinner />
               }
-              {{ account.archived ? 'Unarchive account' : 'Archive account' }}
+              {{
+                (account.archived
+                  ? 'accountHistory.unarchiveAccount'
+                  : 'accountHistory.archiveAccount') | transloco
+              }}
             </button>
           }
           <a
@@ -60,31 +70,31 @@ import { AssetAccount, AssetValuation, HoldingPosition, NetWorthService } from '
             routerLink="/net-worth/valuations/new"
             [queryParams]="{ accountId: accountId() }"
           >
-            Add valuation
+            {{ 'accountHistory.addValuation' | transloco }}
           </a>
         </div>
       </div>
 
       @if (errorMessage()) {
         <div hlmAlert variant="destructive">
-          <p hlmAlertTitle>Couldn't load account history</p>
+          <p hlmAlertTitle>{{ 'accountHistory.loadErrorTitle' | transloco }}</p>
           <p hlmAlertDescription>{{ errorMessage() }}</p>
         </div>
       }
 
       <div hlmCard>
         <div hlmCardHeader>
-          <h2 hlmCardTitle>Valuations</h2>
-          <p hlmCardDescription>Every dated snapshot recorded for this account.</p>
+          <h2 hlmCardTitle>{{ 'accountHistory.valuationsTitle' | transloco }}</h2>
+          <p hlmCardDescription>{{ 'accountHistory.valuationsDescription' | transloco }}</p>
         </div>
         <div hlmCardContent>
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Loading valuations...
+              {{ 'accountHistory.loadingValuations' | transloco }}
             </div>
           } @else if (valuations().length === 0) {
-            <p class="text-muted-foreground text-sm">No valuations recorded yet.</p>
+            <p class="text-muted-foreground text-sm">{{ 'accountHistory.noValuations' | transloco }}</p>
           } @else {
             <ul class="flex flex-col gap-3">
               @for (valuation of valuations(); track valuation.id) {
@@ -101,9 +111,13 @@ import { AssetAccount, AssetValuation, HoldingPosition, NetWorthService } from '
                       </span>
                     </div>
                     <p class="text-muted-foreground truncate text-sm">
-                      {{ valuation.note || 'No note' }}
+                      {{ valuation.note || ('accountHistory.noNote' | transloco) }}
                       @if (valuation.contribution_amount) {
-                        &middot; Contribution {{ valuation.contribution_amount | number: '1.2-2' }}
+                        &middot;
+                        {{
+                          'accountHistory.contribution'
+                            | transloco: { amount: (valuation.contribution_amount | number: '1.2-2') }
+                        }}
                       }
                     </p>
                   </div>
@@ -115,7 +129,7 @@ import { AssetAccount, AssetValuation, HoldingPosition, NetWorthService } from '
                       size="sm"
                       [routerLink]="['/net-worth/valuations', valuation.id, 'edit']"
                     >
-                      Edit
+                      {{ 'common.edit' | transloco }}
                     </a>
                     <button
                       hlmBtn
@@ -128,7 +142,7 @@ import { AssetAccount, AssetValuation, HoldingPosition, NetWorthService } from '
                       @if (deletingId() === valuation.id) {
                         <hlm-spinner />
                       }
-                      Delete
+                      {{ 'common.delete' | transloco }}
                     </button>
                   </div>
                 </li>
@@ -142,8 +156,8 @@ import { AssetAccount, AssetValuation, HoldingPosition, NetWorthService } from '
         <div hlmCard>
           <div hlmCardHeader class="flex flex-row flex-wrap items-start justify-between gap-2">
             <div>
-              <h2 hlmCardTitle>Holdings</h2>
-              <p hlmCardDescription>Individual stocks, ETFs, or funds held in this account.</p>
+              <h2 hlmCardTitle>{{ 'accountHistory.holdingsTitle' | transloco }}</h2>
+              <p hlmCardDescription>{{ 'accountHistory.holdingsDescription' | transloco }}</p>
             </div>
             <a
               hlmBtn
@@ -152,17 +166,17 @@ import { AssetAccount, AssetValuation, HoldingPosition, NetWorthService } from '
               routerLink="/net-worth/holdings/new"
               [queryParams]="{ accountId: accountId() }"
             >
-              New holding
+              {{ 'accountHistory.newHolding' | transloco }}
             </a>
           </div>
           <div hlmCardContent>
             @if (loading()) {
               <div class="flex items-center gap-2 text-sm text-muted-foreground">
                 <hlm-spinner />
-                Loading holdings...
+                {{ 'accountHistory.loadingHoldings' | transloco }}
               </div>
             } @else if (holdings().length === 0) {
-              <p class="text-muted-foreground text-sm">No holdings recorded yet.</p>
+              <p class="text-muted-foreground text-sm">{{ 'accountHistory.noHoldings' | transloco }}</p>
             } @else {
               <ul class="flex flex-col gap-3">
                 @for (holding of holdings(); track holding.id) {
@@ -178,11 +192,20 @@ import { AssetAccount, AssetValuation, HoldingPosition, NetWorthService } from '
                       </div>
                       @if (positionFor(holding.id); as position) {
                         <p class="text-muted-foreground text-sm">
-                          {{ position.quantity | number: '1.0-6' }} units &middot; market value
-                          {{ position.market_value | number: '1.2-2' }} {{ holding.currency }}
+                          {{
+                            'accountHistory.unitsAndMarketValue'
+                              | transloco
+                                : {
+                                    quantity: (position.quantity | number: '1.0-6'),
+                                    marketValue: (position.market_value | number: '1.2-2'),
+                                    currency: holding.currency,
+                                  }
+                          }}
                         </p>
                       } @else {
-                        <p class="text-muted-foreground text-sm">No transactions recorded yet.</p>
+                        <p class="text-muted-foreground text-sm">
+                          {{ 'accountHistory.noTransactionsYet' | transloco }}
+                        </p>
                       }
                     </div>
 
@@ -192,7 +215,7 @@ import { AssetAccount, AssetValuation, HoldingPosition, NetWorthService } from '
                       size="sm"
                       [routerLink]="['/net-worth/holdings', holding.id]"
                     >
-                      View history
+                      {{ 'accountHistory.viewHistory' | transloco }}
                     </a>
                   </li>
                 }
@@ -208,6 +231,7 @@ export class AccountHistory {
   private readonly netWorth = inject(NetWorthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly transloco = inject(TranslocoService);
 
   protected readonly account = signal<AssetAccount | null>(null);
   protected readonly valuations = signal<AssetValuation[]>([]);
@@ -225,10 +249,7 @@ export class AccountHistory {
   }
 
   protected accountTypeLabel(type: AssetAccount['type']): string {
-    return type
-      .split('_')
-      .map((part) => part[0]?.toUpperCase() + part.slice(1))
-      .join(' ');
+    return this.transloco.translate(`netWorth.accountType.${type}`);
   }
 
   protected positionFor(holdingId: string): HoldingPosition | undefined {
@@ -250,7 +271,7 @@ export class AccountHistory {
   }
 
   protected async deleteValuation(valuation: AssetValuation): Promise<void> {
-    const confirmed = window.confirm('Delete this valuation? This cannot be undone.');
+    const confirmed = window.confirm(this.transloco.translate('accountHistory.deleteValuationConfirm'));
     if (!confirmed) {
       return;
     }

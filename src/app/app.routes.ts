@@ -47,6 +47,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/budget/budget').then((m) => m.Budget),
       },
       {
+        path: 'budget/history',
+        loadComponent: () => import('./features/budget/history/history').then((m) => m.History),
+      },
+      {
         path: 'budget/envelopes/new',
         loadComponent: () =>
           import('./features/budget/envelope-form/envelope-form').then((m) => m.EnvelopeForm),
@@ -57,6 +61,11 @@ export const routes: Routes = [
           import('./features/budget/envelope-history/envelope-history').then(
             (m) => m.EnvelopeHistory,
           ),
+      },
+      {
+        path: 'budget/envelopes/:id/edit',
+        loadComponent: () =>
+          import('./features/budget/envelope-form/envelope-form').then((m) => m.EnvelopeForm),
       },
       {
         path: 'budget/transactions/new',
@@ -81,6 +90,20 @@ export const routes: Routes = [
         path: 'budget/transfers/:id/edit',
         loadComponent: () =>
           import('./features/budget/transfer-form/transfer-form').then((m) => m.TransferForm),
+      },
+      {
+        path: 'budget/recurring/new',
+        loadComponent: () =>
+          import('./features/budget/recurring-rule-form/recurring-rule-form').then(
+            (m) => m.RecurringRuleForm,
+          ),
+      },
+      {
+        path: 'budget/recurring/:id/edit',
+        loadComponent: () =>
+          import('./features/budget/recurring-rule-form/recurring-rule-form').then(
+            (m) => m.RecurringRuleForm,
+          ),
       },
       {
         path: 'net-worth',

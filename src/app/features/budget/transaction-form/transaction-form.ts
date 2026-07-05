@@ -10,8 +10,13 @@ import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
 import { HlmToggleGroupImports } from '@spartan-ng/helm/toggle-group';
+import { TranslocoModule } from '@jsverse/transloco';
 
-import { BudgetService, BudgetTransactionType } from '../../../core/budget/budget.service';
+import {
+  BudgetService,
+  BudgetTransactionType,
+  TransactionNameSuggestion,
+} from '../../../core/budget/budget.service';
 
 function toDateInputValue(date: Date): string {
   const year = date.getFullYear();
@@ -32,44 +37,56 @@ function toDateInputValue(date: Date): string {
     HlmSpinnerImports,
     HlmSelectImports,
     HlmToggleGroupImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex min-h-svh items-center justify-center p-6">
       <div hlmCard class="w-full max-w-sm">
         <div hlmCardHeader>
-          <h1 hlmCardTitle>{{ title() }}</h1>
-          <p hlmCardDescription>{{ description() }}</p>
+          <h1 hlmCardTitle>
+            {{ (isEditing() ? 'transactionForm.editTitle' : 'transactionForm.newTitle') | transloco }}
+          </h1>
+          <p hlmCardDescription>
+            {{
+              (isEditing() ? 'transactionForm.editDescription' : 'transactionForm.newDescription')
+                | transloco
+            }}
+          </p>
         </div>
 
         <div hlmCardContent>
           @if (loading()) {
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <hlm-spinner />
-              Loading transaction...
+              {{ 'transactionForm.loading' | transloco }}
             </div>
           } @else {
             <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="flex flex-col gap-4">
               <div hlmField>
-                <label hlmFieldLabel>Type</label>
+                <label hlmFieldLabel>{{ 'transactionForm.type' | transloco }}</label>
                 <hlm-toggle-group
                   type="single"
                   [value]="type()"
                   (valueChange)="onTypeChange($event)"
                 >
-                  <button hlmToggleGroupItem value="expense" type="button">Expense</button>
-                  <button hlmToggleGroupItem value="income" type="button">Income</button>
+                  <button hlmToggleGroupItem value="expense" type="button">
+                    {{ 'transactionForm.expense' | transloco }}
+                  </button>
+                  <button hlmToggleGroupItem value="income" type="button">
+                    {{ 'transactionForm.income' | transloco }}
+                  </button>
                 </hlm-toggle-group>
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel>Envelope</label>
+                <label hlmFieldLabel>{{ 'transactionForm.envelope' | transloco }}</label>
                 <hlm-select
                   [value]="envelopeId()"
                   (valueChange)="envelopeId.set($event ?? undefined)"
                   [itemToString]="envelopeToString"
                 >
                   <hlm-select-trigger class="w-full">
-                    <hlm-select-value placeholder="Choose an envelope" />
+                    <hlm-select-value [placeholder]="'transactionForm.chooseEnvelope' | transloco" />
                   </hlm-select-trigger>
                   <hlm-select-content *hlmSelectPortal>
                     @for (envelope of envelopes(); track envelope.id) {
@@ -78,12 +95,14 @@ function toDateInputValue(date: Date): string {
                   </hlm-select-content>
                 </hlm-select>
                 @if (submitted() && !envelopeId()) {
-                  <hlm-field-error forceShow>Choose an envelope.</hlm-field-error>
+                  <hlm-field-error forceShow>{{
+                    'transactionForm.chooseEnvelopeError' | transloco
+                  }}</hlm-field-error>
                 }
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="amount">Amount</label>
+                <label hlmFieldLabel for="amount">{{ 'transactionForm.amount' | transloco }}</label>
                 <input
                   hlmInput
                   id="amount"
@@ -93,23 +112,43 @@ function toDateInputValue(date: Date): string {
                   formControlName="amount"
                 />
                 @if (form.controls.amount.invalid && form.controls.amount.touched) {
-                  <hlm-field-error forceShow>Enter an amount greater than 0.</hlm-field-error>
+                  <hlm-field-error forceShow>{{
+                    'transactionForm.amountError' | transloco
+                  }}</hlm-field-error>
                 }
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="occurredOn">Date</label>
+                <label hlmFieldLabel for="occurredOn">{{ 'transactionForm.date' | transloco }}</label>
                 <input hlmInput id="occurredOn" type="date" formControlName="occurredOn" />
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="description">Description (optional)</label>
-                <input hlmInput id="description" type="text" formControlName="description" />
+                <label hlmFieldLabel for="name">{{ 'transactionForm.name' | transloco }}</label>
+                <input
+                  hlmInput
+                  id="name"
+                  type="text"
+                  formControlName="name"
+                  autocomplete="off"
+                  list="transaction-name-suggestions"
+                  (input)="onNameInput()"
+                />
+                <datalist id="transaction-name-suggestions">
+                  @for (suggestion of nameSuggestions(); track suggestion.name) {
+                    <option [value]="suggestion.name"></option>
+                  }
+                </datalist>
+                @if (form.controls.name.invalid && form.controls.name.touched) {
+                  <hlm-field-error forceShow>{{
+                    'transactionForm.nameError' | transloco
+                  }}</hlm-field-error>
+                }
               </div>
 
               @if (errorMessage()) {
                 <div hlmAlert variant="destructive">
-                  <p hlmAlertTitle>Couldn't record the transaction</p>
+                  <p hlmAlertTitle>{{ 'transactionForm.errorTitle' | transloco }}</p>
                   <p hlmAlertDescription>{{ errorMessage() }}</p>
                 </div>
               }
@@ -117,8 +156,10 @@ function toDateInputValue(date: Date): string {
               <button hlmBtn type="submit" [disabled]="submitting()">
                 @if (submitting()) {
                   <hlm-spinner />
+                  {{ 'common.saving' | transloco }}
+                } @else {
+                  {{ (isEditing() ? 'transactionForm.saveChanges' : 'transactionForm.save') | transloco }}
                 }
-                {{ submitLabel() }}
               </button>
             </form>
           }
@@ -142,29 +183,16 @@ export class TransactionForm {
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly transactionId = signal<string | null>(this.route.snapshot.paramMap.get('id'));
   protected readonly isEditing = computed(() => this.transactionId() !== null);
-  protected readonly title = computed(() =>
-    this.isEditing() ? 'Edit transaction' : 'Record a transaction',
-  );
-  protected readonly description = computed(() =>
-    this.isEditing()
-      ? 'Update an expense or top-up for one of your envelopes.'
-      : 'Log an expense or a top-up for one of your envelopes.',
-  );
-  protected readonly submitLabel = computed(() => {
-    if (this.submitting()) {
-      return this.isEditing() ? 'Saving...' : 'Saving...';
-    }
-
-    return this.isEditing() ? 'Save changes' : 'Save transaction';
-  });
 
   protected readonly envelopeToString = (id: string): string =>
     this.envelopes().find((envelope) => envelope.id === id)?.name ?? '';
 
+  protected readonly nameSuggestions = signal<TransactionNameSuggestion[]>([]);
+
   protected readonly form = this.fb.nonNullable.group({
     amount: [0, [Validators.required, Validators.min(0.01)]],
     occurredOn: [toDateInputValue(new Date()), Validators.required],
-    description: [''],
+    name: ['', [Validators.required, Validators.minLength(1)]],
   });
 
   constructor() {
@@ -179,6 +207,14 @@ export class TransactionForm {
     }
   }
 
+  protected onNameInput(): void {
+    const name = this.form.controls.name.value;
+    const suggestion = this.nameSuggestions().find((s) => s.name === name);
+    if (suggestion) {
+      this.envelopeId.set(suggestion.envelope_id);
+    }
+  }
+
   protected async submit(): Promise<void> {
     this.submitted.set(true);
 
@@ -190,13 +226,13 @@ export class TransactionForm {
     this.errorMessage.set(null);
 
     try {
-      const { amount, occurredOn, description } = this.form.getRawValue();
+      const { amount, occurredOn, name } = this.form.getRawValue();
       const input = {
         envelopeId: this.envelopeId()!,
         type: this.type(),
         amount,
         occurredOn: new Date(occurredOn),
-        description,
+        name,
       };
 
       if (this.transactionId()) {
@@ -218,7 +254,11 @@ export class TransactionForm {
     this.errorMessage.set(null);
 
     try {
-      await this.budget.loadEnvelopes();
+      const [, nameSuggestions] = await Promise.all([
+        this.budget.loadEnvelopes(),
+        this.budget.loadTransactionNameSuggestions(),
+      ]);
+      this.nameSuggestions.set(nameSuggestions);
 
       if (this.transactionId()) {
         const transaction = await this.budget.loadTransaction(this.transactionId()!);
@@ -227,7 +267,7 @@ export class TransactionForm {
         this.form.patchValue({
           amount: Number(transaction.amount),
           occurredOn: transaction.occurred_on,
-          description: transaction.description ?? '',
+          name: transaction.name,
         });
       }
     } catch (error) {

@@ -8,6 +8,7 @@ import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { TranslocoModule } from '@jsverse/transloco';
 
 import { HouseholdService } from '../../../core/household/household.service';
 
@@ -21,30 +22,31 @@ import { HouseholdService } from '../../../core/household/household.service';
     HlmButtonImports,
     HlmAlertImports,
     HlmSpinnerImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex min-h-svh items-center justify-center p-6">
       <div hlmCard class="w-full max-w-sm">
         <div hlmCardHeader>
-          <h1 hlmCardTitle>Create your household</h1>
+          <h1 hlmCardTitle>{{ 'household.create.title' | transloco }}</h1>
           <p hlmCardDescription>
-            A household groups your budget and net worth data and can be shared with others later.
+            {{ 'household.create.description' | transloco }}
           </p>
         </div>
 
         <div hlmCardContent>
           <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="flex flex-col gap-4">
             <div hlmField>
-              <label hlmFieldLabel for="name">Household name</label>
+              <label hlmFieldLabel for="name">{{ 'household.create.name' | transloco }}</label>
               <input hlmInput id="name" type="text" formControlName="name" autocomplete="off" />
               @if (form.controls.name.invalid && form.controls.name.touched) {
-                <hlm-field-error forceShow>Enter at least 2 characters.</hlm-field-error>
+                <hlm-field-error forceShow>{{ 'envelopeForm.nameError' | transloco }}</hlm-field-error>
               }
             </div>
 
             @if (errorMessage()) {
               <div hlmAlert variant="destructive">
-                <p hlmAlertTitle>Couldn't create the household</p>
+                <p hlmAlertTitle>{{ 'household.create.errorTitle' | transloco }}</p>
                 <p hlmAlertDescription>{{ errorMessage() }}</p>
               </div>
             }
@@ -52,8 +54,10 @@ import { HouseholdService } from '../../../core/household/household.service';
             <button hlmBtn type="submit" [disabled]="form.invalid || submitting()">
               @if (submitting()) {
                 <hlm-spinner />
+                {{ 'common.saving' | transloco }}
+              } @else {
+                {{ 'household.create.submit' | transloco }}
               }
-              {{ submitting() ? 'Creating…' : 'Create household' }}
             </button>
           </form>
         </div>

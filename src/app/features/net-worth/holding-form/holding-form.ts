@@ -8,6 +8,7 @@ import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { TranslocoModule } from '@jsverse/transloco';
 
 import { NetWorthService } from '../../../core/net-worth/net-worth.service';
 
@@ -21,35 +22,36 @@ import { NetWorthService } from '../../../core/net-worth/net-worth.service';
     HlmFieldImports,
     HlmInputImports,
     HlmSpinnerImports,
+    TranslocoModule,
   ],
   template: `
     <div class="flex min-h-svh items-center justify-center p-6">
       <div hlmCard class="w-full max-w-lg">
         <div hlmCardHeader>
-          <h1 hlmCardTitle>New holding</h1>
+          <h1 hlmCardTitle>{{ 'holdingForm.title' | transloco }}</h1>
           <p hlmCardDescription>
-            Track a specific stock, ETF, or fund held within this investment account.
+            {{ 'holdingForm.description' | transloco }}
           </p>
         </div>
 
         <div hlmCardContent>
           <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="flex flex-col gap-4">
             <div hlmField>
-              <label hlmFieldLabel for="name">Name</label>
+              <label hlmFieldLabel for="name">{{ 'holdingForm.name' | transloco }}</label>
               <input hlmInput id="name" type="text" formControlName="name" autocomplete="off" />
               @if (form.controls.name.invalid && form.controls.name.touched) {
-                <hlm-field-error forceShow>Enter at least 2 characters.</hlm-field-error>
+                <hlm-field-error forceShow>{{ 'holdingForm.nameError' | transloco }}</hlm-field-error>
               }
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2">
               <div hlmField>
-                <label hlmFieldLabel for="ticker">Ticker (optional)</label>
+                <label hlmFieldLabel for="ticker">{{ 'holdingForm.ticker' | transloco }}</label>
                 <input hlmInput id="ticker" type="text" formControlName="ticker" />
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="currency">Currency</label>
+                <label hlmFieldLabel for="currency">{{ 'holdingForm.currency' | transloco }}</label>
                 <input
                   hlmInput
                   id="currency"
@@ -62,7 +64,7 @@ import { NetWorthService } from '../../../core/net-worth/net-worth.service';
 
             @if (errorMessage()) {
               <div hlmAlert variant="destructive">
-                <p hlmAlertTitle>Couldn't create the holding</p>
+                <p hlmAlertTitle>{{ 'holdingForm.errorTitle' | transloco }}</p>
                 <p hlmAlertDescription>{{ errorMessage() }}</p>
               </div>
             }
@@ -71,7 +73,7 @@ import { NetWorthService } from '../../../core/net-worth/net-worth.service';
               @if (submitting()) {
                 <hlm-spinner />
               }
-              {{ submitting() ? 'Creating...' : 'Create holding' }}
+              {{ (submitting() ? 'holdingForm.creating' : 'holdingForm.create') | transloco }}
             </button>
           </form>
         </div>
