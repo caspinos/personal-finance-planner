@@ -138,6 +138,38 @@ export const routes: Routes = [
             (m) => m.HoldingHistory,
           ),
       },
+      {
+        path: 'rates',
+        loadComponent: () => import('./features/rates/rates').then((m) => m.Rates),
+      },
+      {
+        path: 'rates/exchange-rates/new',
+        loadComponent: () =>
+          import('./features/rates/exchange-rate-form/exchange-rate-form').then(
+            (m) => m.ExchangeRateForm,
+          ),
+      },
+      {
+        path: 'rates/exchange-rates/:id/edit',
+        loadComponent: () =>
+          import('./features/rates/exchange-rate-form/exchange-rate-form').then(
+            (m) => m.ExchangeRateForm,
+          ),
+      },
+      {
+        path: 'rates/commodity-prices/new',
+        loadComponent: () =>
+          import('./features/rates/commodity-price-form/commodity-price-form').then(
+            (m) => m.CommodityPriceForm,
+          ),
+      },
+      {
+        path: 'rates/commodity-prices/:id/edit',
+        loadComponent: () =>
+          import('./features/rates/commodity-price-form/commodity-price-form').then(
+            (m) => m.CommodityPriceForm,
+          ),
+      },
     ],
   },
 ];

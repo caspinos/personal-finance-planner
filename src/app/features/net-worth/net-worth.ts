@@ -9,6 +9,7 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
 
+import { HouseholdService } from '../../core/household/household.service';
 import {
   AssetLiquidityClass,
   NetWorthService,
@@ -77,8 +78,15 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
               class="text-3xl font-semibold"
               [class.text-destructive]="netWorth.totalNetWorth() < 0"
             >
-              {{ netWorth.totalNetWorth() | number: '1.2-2' }}
+              {{ netWorth.totalNetWorth() | number: '1.2-2' }} {{ baseCurrency() }}
             </p>
+            @if (netWorth.hasUnconvertedRows()) {
+              <p class="text-muted-foreground mt-1 text-xs">
+                Some accounts have no exchange rate set &mdash; their amount is included
+                unconverted above.
+                <a routerLink="/rates" class="underline">Add a rate</a>
+              </p>
+            }
           }
         </div>
       </div>
@@ -131,7 +139,7 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
                 class="font-medium"
                 [class.text-destructive]="group.subtotal < 0"
               >
-                {{ group.subtotal | number: '1.2-2' }}
+                {{ group.subtotal | number: '1.2-2' }} {{ baseCurrency() }}
               </span>
             </div>
 
@@ -154,6 +162,19 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
                     >
                       {{ row.signed_value | number: '1.2-2' }} {{ row.currency }}
                     </p>
+                    @if (row.currency !== baseCurrency()) {
+                      @if (row.signed_value_in_base !== null) {
+                        <p class="text-muted-foreground text-sm">
+                          &approx; {{ row.signed_value_in_base | number: '1.2-2' }}
+                          {{ baseCurrency() }}
+                        </p>
+                      } @else {
+                        <p class="text-muted-foreground text-xs">
+                          No exchange rate &mdash;
+                          <a routerLink="/rates" class="underline">add one</a>
+                        </p>
+                      }
+                    }
                     <p class="text-muted-foreground text-sm">
                       @if (row.valued_on) {
                         Valued {{ row.valued_on | date: 'mediumDate' }}
@@ -192,6 +213,7 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; label: string }> = 
 })
 export class NetWorth {
   protected readonly netWorth = inject(NetWorthService);
+  private readonly households = inject(HouseholdService);
 
   protected readonly liquidityClasses = LIQUIDITY_CLASSES;
   protected readonly loading = signal(true);
@@ -199,6 +221,9 @@ export class NetWorth {
   protected readonly asOf = signal(new Date());
   protected readonly liquidityFilter = signal<AssetLiquidityClass | undefined>(undefined);
   protected readonly rows = this.netWorth.summary;
+  protected readonly baseCurrency = computed(
+    () => this.households.currentHousehold()?.base_currency ?? 'PLN',
+  );
   protected readonly asOfLabel = computed(() =>
     this.asOf().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
   );
@@ -218,7 +243,7 @@ export class NetWorth {
     return Array.from(groups.entries()).map(([type, rows]) => ({
       type,
       rows,
-      subtotal: rows.reduce((total, row) => total + row.signed_value, 0),
+      subtotal: rows.reduce((total, row) => total + (row.signed_value_in_base ?? row.signed_value), 0),
     }));
   });
 

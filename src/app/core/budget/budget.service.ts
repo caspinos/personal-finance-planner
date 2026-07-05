@@ -28,6 +28,11 @@ export interface BudgetTransaction {
   created_at: string;
 }
 
+export interface EnvelopeBalance {
+  balance: number;
+  balance_in_base: number | null;
+}
+
 export interface EnvelopeTransfer {
   id: string;
   household_id: string;
@@ -80,7 +85,7 @@ export class BudgetService {
   private readonly auth = inject(AuthService);
 
   private readonly envelopesSignal = signal<Envelope[]>([]);
-  private readonly balancesSignal = signal<Record<string, number>>({});
+  private readonly balancesSignal = signal<Record<string, EnvelopeBalance>>({});
 
   readonly envelopes = this.envelopesSignal.asReadonly();
   readonly activeEnvelopes = computed(() => this.envelopesSignal().filter((e) => !e.archived));
@@ -120,7 +125,7 @@ export class BudgetService {
     return this.envelopesSignal();
   }
 
-  async loadBalances(asOf: Date): Promise<Record<string, number>> {
+  async loadBalances(asOf: Date): Promise<Record<string, EnvelopeBalance>> {
     const householdId = this.requireHouseholdId();
 
     const { data, error } = await this.supabase.rpc('get_envelope_balances', {
@@ -132,9 +137,12 @@ export class BudgetService {
       throw error;
     }
 
-    const balances: Record<string, number> = {};
+    const balances: Record<string, EnvelopeBalance> = {};
     for (const row of data ?? []) {
-      balances[row.envelope_id] = Number(row.balance);
+      balances[row.envelope_id] = {
+        balance: Number(row.balance),
+        balance_in_base: row.balance_in_base === null ? null : Number(row.balance_in_base),
+      };
     }
 
     this.balancesSignal.set(balances);

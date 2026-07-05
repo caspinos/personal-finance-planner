@@ -123,12 +123,30 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 
 ## 4. Multi-currency & rates — Stage 3/4
 
-All ⬜ not started:
-
-- ⬜ `exchange_rates` table + historical rate storage
-- ⬜ `commodity_prices` (e.g. gold) + `price_source`
-- ⬜ Manual rate entry/correction UI
-- ⬜ Base-currency conversion used across budget and net worth views
+- ✅ `households.base_currency` (default `PLN`, owner-editable) plus
+  household-scoped `exchange_rates` (`currency`, `rate_to_pln`, `rate_date`,
+  `source`, `note`) and `commodity_prices` (`commodity`, `price`, `currency`,
+  `price_date`, `source`, `note`) tables with RLS
+  (`supabase/migrations/20260705010000_multi_currency_rates.sql`). Rates are
+  always stored relative to PLN as a fixed pivot, so converting between any
+  two currencies hops through PLN; a `get_exchange_rate(household, currency,
+  as_of)` SQL helper returns the latest applicable rate (or `null` if none
+  exists for that date)
+- ✅ Manual rate entry/correction UI: a "Rates" page (`/rates`) with a
+  base-currency setting, and add/edit/delete forms for exchange rates and
+  commodity prices, following the existing account/valuation form
+  conventions (`RatesService`, `Rates`, `ExchangeRateForm`,
+  `CommodityPriceForm`)
+- ✅ Base-currency conversion used across budget and net worth views:
+  `get_net_worth_summary` and `get_holding_positions` now also return
+  `value_in_base`/`signed_value_in_base` and `market_value_in_base`/
+  `unrealized_gain_in_base`; `get_envelope_balances` returns
+  `balance_in_base`. The net worth total/per-account/per-group figures and
+  the budget envelope balances display a converted secondary amount (or a
+  "no exchange rate" warning instead of a wrong number) when a currency
+  differs from the household's base currency. This also fixed a
+  pre-existing bug where `NetWorthService.totalNetWorth` summed
+  `signed_value` across accounts regardless of currency
 - ⬜ Automatic rate fetching (post-MVP per the plan)
 
 ## 5. Reports & analytics — Stage 4
@@ -166,5 +184,9 @@ All ⬜ not started:
   with a role, accepting via the generated link as a brand-new user, owner
   role changes/removal, and revoking a pending invite (`e2e/household.spec.ts`,
   same requirements as above).
+- ✅ E2E test coverage for multi-currency/rates (Playwright): default base
+  currency, exchange rate and commodity price CRUD, base-currency conversion
+  of net worth totals in both directions, and the missing-rate warning
+  (`e2e/multi-currency.spec.ts`, same requirements as above).
 - ⬜ Accessibility audit (AXE) pass over implemented screens
 - ⬜ Audit log for key operations (`AuditLog` table from the domain model)

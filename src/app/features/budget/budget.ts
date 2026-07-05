@@ -6,6 +6,7 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 
 import { BudgetService } from '../../core/budget/budget.service';
+import { HouseholdService } from '../../core/household/household.service';
 
 function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -71,13 +72,26 @@ function endOfMonth(date: Date): Date {
                 <h2 hlmCardTitle>{{ envelope.name }}</h2>
                 <p hlmCardDescription>Balance as of {{ monthLabel() }}</p>
               </div>
-              <div hlmCardContent>
+              <div hlmCardContent class="flex flex-col gap-1">
                 <p
                   class="text-2xl font-semibold"
-                  [class.text-destructive]="(balances()[envelope.id] ?? 0) < 0"
+                  [class.text-destructive]="(balances()[envelope.id]?.balance ?? 0) < 0"
                 >
-                  {{ balances()[envelope.id] ?? 0 | number: '1.2-2' }}
+                  {{ balances()[envelope.id]?.balance ?? 0 | number: '1.2-2' }} PLN
                 </p>
+                @if (baseCurrency() !== 'PLN') {
+                  @if (balances()[envelope.id]?.balance_in_base != null) {
+                    <p class="text-muted-foreground text-sm">
+                      &approx;
+                      {{ balances()[envelope.id]?.balance_in_base | number: '1.2-2' }}
+                      {{ baseCurrency() }}
+                    </p>
+                  } @else {
+                    <p class="text-muted-foreground text-xs">
+                      No {{ baseCurrency() }} rate set
+                    </p>
+                  }
+                }
               </div>
               <div hlmCardFooter>
                 <a
@@ -98,11 +112,15 @@ function endOfMonth(date: Date): Date {
 })
 export class Budget {
   private readonly budget = inject(BudgetService);
+  private readonly households = inject(HouseholdService);
 
   protected readonly loading = signal(true);
   protected readonly month = signal(startOfMonth(new Date()));
   protected readonly envelopes = this.budget.activeEnvelopes;
   protected readonly balances = this.budget.balances;
+  protected readonly baseCurrency = computed(
+    () => this.households.currentHousehold()?.base_currency ?? 'PLN',
+  );
 
   protected readonly monthLabel = computed(() =>
     this.month().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
