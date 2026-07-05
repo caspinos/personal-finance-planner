@@ -19,6 +19,41 @@ This is **Personal Finance Planner** — a web app for tracking expenses, envelo
 - All project documentation (in `docs/` and elsewhere) MUST be written in **English** going forward.
 - Code comments, commit messages, and identifiers must also be in English.
 
+## Development, Testing & Deployment Workflow
+
+This is a **personal/household project**, run by a single developer — optimize for a simple, low-maintenance, free-tier-friendly workflow over enterprise-grade process. There is no dedicated staging environment; local Supabase + the `main` branch's Cloudflare preview deployment fill that role (see [Branches](#branches-main-vs-prod) below).
+
+### Local development
+
+- Backend: `supabase start` runs the local Postgres/Auth/Storage stack (requires Docker). The dev frontend config (`src/environments/environment.development.ts`) points at it (`http://127.0.0.1:54321`).
+- Frontend: `npm start` (`ng serve`) serves at `http://localhost:4200`.
+- Schema changes: add a new file under `supabase/migrations/` (`supabase migration new <name>`), then `supabase db reset` to replay all migrations locally before testing against them.
+
+### Testing
+
+- Unit tests: `npm test` (Vitest) — runs in CI (`.github/workflows/ci.yml`) on every push/PR to `main`.
+- E2E tests: `npm run e2e` (Playwright, in `e2e/`) — runs against the local dev server and local Supabase stack. Not yet wired into CI; run manually before merging changes to user-facing flows.
+- Manual testing: every branch/PR gets an automatic Cloudflare preview deployment (frontend only — Supabase branching/per-PR preview databases is a paid feature and is **not** enabled here). Verify schema/RLS changes locally against `supabase start` before merging.
+
+### Branches: `main` vs `prod`
+
+- **`main`** — feature branches/PRs merge here. Cloudflare auto-deploys `main` to a **preview** URL (not production); Supabase does **not** apply its migrations here.
+- **`prod`** — the actual production branch. It starts equal to `main` and is only updated by a deliberate promotion (merge/fast-forward `main` → `prod`) once changes have been verified on the `main` preview. Cloudflare's production branch and Supabase's GitHub-integration production branch are both configured to watch `prod`, not `main`.
+- This exists because there's no automated e2e coverage in CI and no per-PR preview database — `prod` is the manual gate that replaces those safety nets for a single-developer project.
+- To release: after confirming things work on the `main` preview deployment, promote with a PR (or fast-forward merge) from `main` into `prod`. That single action deploys the frontend to production **and** applies any pending migrations to the production database.
+
+### Deployment (triggered by promoting `main` → `prod`)
+
+- **Frontend:** Cloudflare (Workers with static assets, see `wrangler.jsonc`) is connected to this GitHub repo; its production branch is `prod`.
+- **Backend:** Supabase's GitHub integration auto-applies new files in `supabase/migrations/` to the production database when `prod` is updated. Do **not** run `supabase db push` manually against the linked production project — the GitHub integration is the only path migrations should take to prod, so every schema change goes through a reviewed promotion to `prod`.
+- Production Supabase project ref: `bliwvaoxxydeampcjqvq` (linked via `supabase link`).
+
+### Secrets
+
+- `src/environments/environment.ts` (production) commits the real `supabaseUrl` and the **publishable** (anon) key — safe to commit, since access is enforced entirely by Postgres RLS policies.
+- **Never** commit the `service_role`/secret Supabase key anywhere, and never print it to logs/output.
+- Cloudflare's build Node.js version is pinned via `.nvmrc` / `engines` in `package.json` — the Angular CLI requires a newer Node than Cloudflare's default build image provides.
+
 ## UI Library: spartan/ui
 
 The app uses [spartan/ui](https://www.spartan.ng) for UI components. It has a two-layer architecture:
