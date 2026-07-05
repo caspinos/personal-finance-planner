@@ -56,6 +56,8 @@ export interface NetWorthSummaryRow {
   valued_on: string | null;
   value: number;
   signed_value: number;
+  value_in_base: number | null;
+  signed_value_in_base: number | null;
 }
 
 export type AssetTransactionType = 'buy' | 'sell';
@@ -98,6 +100,8 @@ export interface HoldingPosition {
   latest_price: number;
   market_value: number;
   unrealized_gain: number;
+  market_value_in_base: number | null;
+  unrealized_gain_in_base: number | null;
 }
 
 function toDateOnly(date: Date): string {
@@ -122,7 +126,13 @@ export class NetWorthService {
   readonly activeAccounts = computed(() => this.accountsSignal().filter((account) => !account.archived));
   readonly summary = this.summarySignal.asReadonly();
   readonly totalNetWorth = computed(() =>
-    this.summarySignal().reduce((total, row) => total + row.signed_value, 0),
+    this.summarySignal().reduce(
+      (total, row) => total + (row.signed_value_in_base ?? row.signed_value),
+      0,
+    ),
+  );
+  readonly hasUnconvertedRows = computed(() =>
+    this.summarySignal().some((row) => row.signed_value_in_base === null),
   );
   readonly holdings = this.holdingsSignal.asReadonly();
   readonly activeHoldings = computed(() =>
@@ -172,6 +182,9 @@ export class NetWorthService {
         valued_on: row.valued_on,
         value: Number(row.value),
         signed_value: Number(row.signed_value),
+        value_in_base: row.value_in_base === null ? null : Number(row.value_in_base),
+        signed_value_in_base:
+          row.signed_value_in_base === null ? null : Number(row.signed_value_in_base),
       });
     }
 
@@ -455,6 +468,10 @@ export class NetWorthService {
         latest_price: Number(row.latest_price),
         market_value: Number(row.market_value),
         unrealized_gain: Number(row.unrealized_gain),
+        market_value_in_base:
+          row.market_value_in_base === null ? null : Number(row.market_value_in_base),
+        unrealized_gain_in_base:
+          row.unrealized_gain_in_base === null ? null : Number(row.unrealized_gain_in_base),
       });
     }
 

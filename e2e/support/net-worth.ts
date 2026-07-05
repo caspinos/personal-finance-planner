@@ -63,10 +63,14 @@ export async function expectAccountValue(
   await expect(card.getByText(expectedValue, { exact: true })).toBeVisible();
 }
 
-/** Asserts the displayed total net worth figure on the net worth page. */
-export async function expectTotalNetWorth(page: Page, expectedTotal: string): Promise<void> {
+/** Asserts the displayed total net worth figure (in the given base currency) on the net worth page. */
+export async function expectTotalNetWorth(
+  page: Page,
+  expectedTotal: string,
+  currency = 'PLN'
+): Promise<void> {
   const card = page.locator('[hlmCard]').filter({ hasText: 'Total net worth' });
-  await expect(card.getByText(expectedTotal, { exact: true })).toBeVisible();
+  await expect(card.getByText(`${expectedTotal} ${currency}`, { exact: true })).toBeVisible();
 }
 
 /** Creates a holding from an account history page, waiting to land back on it. */

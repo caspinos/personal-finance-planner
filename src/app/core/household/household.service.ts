@@ -8,6 +8,7 @@ export interface Household {
   name: string;
   created_by: string;
   created_at: string;
+  base_currency: string;
 }
 
 export type HouseholdRole = 'owner' | 'editor' | 'viewer';
@@ -100,6 +101,26 @@ export class HouseholdService {
 
     this.householdsSignal.update((households) => [...households, data]);
     this.selectHousehold(data.id);
+    return data;
+  }
+
+  async updateBaseCurrency(baseCurrency: string): Promise<Household> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('households')
+      .update({ base_currency: baseCurrency })
+      .eq('id', householdId)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    this.householdsSignal.update((households) =>
+      households.map((household) => (household.id === householdId ? data : household)),
+    );
     return data;
   }
 

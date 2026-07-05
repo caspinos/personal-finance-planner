@@ -194,7 +194,7 @@ export class EnvelopeHistory {
   );
   protected readonly currentBalance = computed(() => {
     const envelopeId = this.envelopeId();
-    return this.balances()[envelopeId] ?? 0;
+    return this.balances()[envelopeId]?.balance ?? 0;
   });
 
   constructor() {

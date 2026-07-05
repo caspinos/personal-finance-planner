@@ -59,12 +59,12 @@ export async function transferFunds(
   await expect(page).toHaveURL('/budget');
 }
 
-/** Asserts the displayed balance for a given envelope's card on the budget page. */
+/** Asserts the displayed balance (in PLN) for a given envelope's card on the budget page. */
 export async function expectEnvelopeBalance(
   page: Page,
   envelopeName: string,
   expectedBalance: string
 ): Promise<void> {
   const card = page.locator('[hlmCard]').filter({ hasText: envelopeName });
-  await expect(card.getByText(expectedBalance, { exact: true })).toBeVisible();
+  await expect(card.getByText(`${expectedBalance} PLN`, { exact: true })).toBeVisible();
 }
