@@ -50,3 +50,6 @@ Thumbs.db
 
 # Supabase local
 .supabase
+
+# Wrangler local
+.wrangler
