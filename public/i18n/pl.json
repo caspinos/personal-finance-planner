@@ -207,6 +207,7 @@
     "subtitle": "Ręczne wyceny kont na dzień {{date}}.",
     "addValuation": "Dodaj wycenę",
     "newAccount": "Nowe konto",
+    "viewTimeline": "Widok w czasie",
     "loadErrorTitle": "Nie udało się załadować majątku netto",
     "totalNetWorth": "Całkowity majątek netto",
     "totalNetWorthDescription": "Zobowiązania są odejmowane od sumy.",
@@ -243,6 +244,18 @@
       "illiquid": "Niepłynne",
       "liability": "Zobowiązanie"
     }
+  },
+  "netWorthTimeline": {
+    "back": "Wróć do majątku netto",
+    "title": "Wartość majątku w czasie",
+    "subtitle": "Wartości kont na koniec każdego miesiąca, przeliczone na {{currency}}.",
+    "previous": "Poprzednie 12 miesięcy",
+    "next": "Następne 12 miesięcy",
+    "loadErrorTitle": "Nie udało się załadować widoku w czasie",
+    "loading": "Ładowanie widoku w czasie...",
+    "item": "Pozycja",
+    "total": "Suma",
+    "changeMoM": "Zmiana m/m"
   },
   "accountForm": {
     "title": "Nowe konto majątkowe",

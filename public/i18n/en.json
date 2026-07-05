@@ -207,6 +207,7 @@
     "subtitle": "Manual account valuations as of {{date}}.",
     "addValuation": "Add valuation",
     "newAccount": "New account",
+    "viewTimeline": "Timeline view",
     "loadErrorTitle": "Couldn't load net worth",
     "totalNetWorth": "Total net worth",
     "totalNetWorthDescription": "Liabilities are subtracted from the total.",
@@ -243,6 +244,18 @@
       "illiquid": "Illiquid",
       "liability": "Liability"
     }
+  },
+  "netWorthTimeline": {
+    "back": "Back to net worth",
+    "title": "Net worth over time",
+    "subtitle": "Account balances at the end of each month, converted to {{currency}}.",
+    "previous": "Previous 12 months",
+    "next": "Next 12 months",
+    "loadErrorTitle": "Couldn't load the timeline view",
+    "loading": "Loading timeline...",
+    "item": "Item",
+    "total": "Total",
+    "changeMoM": "Change m/m"
   },
   "accountForm": {
     "title": "New asset account",

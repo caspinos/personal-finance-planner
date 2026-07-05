@@ -110,6 +110,13 @@ export const routes: Routes = [
         loadComponent: () => import('./features/net-worth/net-worth').then((m) => m.NetWorth),
       },
       {
+        path: 'net-worth/timeline',
+        loadComponent: () =>
+          import('./features/net-worth/net-worth-timeline/net-worth-timeline').then(
+            (m) => m.NetWorthTimeline,
+          ),
+      },
+      {
         path: 'net-worth/accounts/new',
         loadComponent: () =>
           import('./features/net-worth/account-form/account-form').then((m) => m.AccountForm),

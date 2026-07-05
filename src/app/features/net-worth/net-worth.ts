@@ -51,6 +51,9 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; labelKey: string }>
         </div>
 
         <div class="flex flex-wrap gap-2">
+          <a hlmBtn variant="ghost" size="sm" routerLink="/net-worth/timeline">
+            {{ 'netWorth.viewTimeline' | transloco }}
+          </a>
           <a hlmBtn variant="outline" size="sm" routerLink="/net-worth/valuations/new">
             {{ 'netWorth.addValuation' | transloco }}
           </a>
