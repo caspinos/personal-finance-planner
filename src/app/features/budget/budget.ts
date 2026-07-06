@@ -66,6 +66,9 @@ function endOfMonth(date: Date): Date {
           <a hlmBtn size="sm" routerLink="/budget/transactions/new">{{
             'budget.recordTransaction' | transloco
           }}</a>
+          <a hlmBtn variant="secondary" size="sm" routerLink="/budget/funding/new">{{
+            'budget.fundEnvelopes' | transloco
+          }}</a>
           <a hlmBtn variant="secondary" size="sm" routerLink="/budget/envelopes/new">{{
             'budget.newEnvelope' | transloco
           }}</a>
