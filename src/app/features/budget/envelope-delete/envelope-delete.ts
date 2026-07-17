@@ -35,9 +35,21 @@ import { BudgetService, Envelope } from '../../../core/budget/budget.service';
 
         <div hlmCardContent>
           @if (loading()) {
-            <div class="flex items-center gap-2 text-sm text-muted-foreground">
+            <div class="text-muted-foreground flex items-center gap-2 text-sm">
               <hlm-spinner />
               {{ 'envelopeDelete.loading' | transloco }}
+            </div>
+          } @else if (!envelope()) {
+            <div class="flex flex-col gap-4">
+              <div hlmAlert variant="destructive">
+                <p hlmAlertTitle>{{ 'envelopeDelete.errorTitle' | transloco }}</p>
+                <p hlmAlertDescription>
+                  {{ errorMessage() ?? ('common.somethingWentWrong' | transloco) }}
+                </p>
+              </div>
+              <a hlmBtn variant="outline" routerLink="/budget">
+                {{ 'envelopeDelete.cancel' | transloco }}
+              </a>
             </div>
           } @else if (targetOptions().length === 0) {
             <div class="flex flex-col gap-4">
@@ -50,7 +62,7 @@ import { BudgetService, Envelope } from '../../../core/budget/budget.service';
               </a>
             </div>
           } @else {
-            <form (ngSubmit)="submit()" class="flex flex-col gap-4">
+            <div class="flex flex-col gap-4">
               <div hlmField>
                 <label hlmFieldLabel>{{ 'envelopeDelete.targetEnvelope' | transloco }}</label>
                 <hlm-select
@@ -82,7 +94,13 @@ import { BudgetService, Envelope } from '../../../core/budget/budget.service';
               }
 
               <div class="flex flex-col gap-2">
-                <button hlmBtn variant="destructive" type="submit" [disabled]="submitting()">
+                <button
+                  hlmBtn
+                  variant="destructive"
+                  type="button"
+                  [disabled]="submitting()"
+                  (click)="submit()"
+                >
                   @if (submitting()) {
                     <hlm-spinner />
                     {{ 'envelopeDelete.deleting' | transloco }}
@@ -94,7 +112,7 @@ import { BudgetService, Envelope } from '../../../core/budget/budget.service';
                   {{ 'envelopeDelete.cancel' | transloco }}
                 </a>
               </div>
-            </form>
+            </div>
           }
         </div>
       </div>

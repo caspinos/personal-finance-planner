@@ -25,6 +25,19 @@ begin
     raise exception 'Cannot move operations to the envelope being deleted';
   end if;
 
+  -- Lock both envelope rows before touching their dependent rows (deterministic
+  -- id order to avoid deadlocks between two concurrent deletions). Inserting a
+  -- transaction/transfer takes a FOR KEY SHARE lock on its parent envelope row
+  -- to validate the foreign key; taking FOR UPDATE here conflicts with that, so
+  -- a concurrent operation cannot be inserted between this validation and the
+  -- final delete -- which would otherwise be cascade-deleted instead of moved.
+  perform 1
+  from public.envelopes
+  where id in (p_envelope_id, p_target_envelope_id)
+    and household_id = p_household_id
+  order by id
+  for update;
+
   if not exists (
     select 1 from public.envelopes
     where id = p_envelope_id and household_id = p_household_id
