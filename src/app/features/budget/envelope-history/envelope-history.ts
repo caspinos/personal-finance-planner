@@ -79,6 +79,14 @@ function endOfMonth(date: Date): Date {
                 ) | transloco
               }}
             </button>
+            <a
+              hlmBtn
+              variant="destructive"
+              size="sm"
+              [routerLink]="['/budget/envelopes', envelope.id, 'delete']"
+            >
+              {{ 'envelopeHistory.deleteEnvelope' | transloco }}
+            </a>
           }
           <div class="flex items-center gap-2">
             <button

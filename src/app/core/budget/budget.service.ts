@@ -481,6 +481,34 @@ export class BudgetService {
     );
   }
 
+  /**
+   * Deletes an envelope, first moving all of its operations (transactions,
+   * transfers, and recurring rules) to another envelope so history is
+   * preserved. Runs atomically in a single RPC.
+   */
+  async deleteEnvelope(envelopeId: string, targetEnvelopeId: string): Promise<void> {
+    const householdId = this.requireHouseholdId();
+
+    const { error } = await this.supabase.rpc('delete_envelope_with_transfer', {
+      p_household_id: householdId,
+      p_envelope_id: envelopeId,
+      p_target_envelope_id: targetEnvelopeId,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    this.envelopesSignal.update((envelopes) =>
+      envelopes.filter((envelope) => envelope.id !== envelopeId),
+    );
+    this.recurringRulesSignal.update((rules) =>
+      rules.map((rule) =>
+        rule.envelope_id === envelopeId ? { ...rule, envelope_id: targetEnvelopeId } : rule,
+      ),
+    );
+  }
+
   async loadTransaction(transactionId: string): Promise<BudgetTransaction> {
     const householdId = this.requireHouseholdId();
 

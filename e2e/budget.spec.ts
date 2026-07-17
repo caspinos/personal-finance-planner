@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { signUpWithHousehold } from './support/auth';
 import {
   createEnvelope,
+  deleteEnvelopeMovingTo,
   expectEnvelopeBalance,
   recordTransaction,
   transferFunds,
@@ -113,6 +114,49 @@ test.describe('Budget envelopes', () => {
     page.once('dialog', (dialog) => dialog.accept());
     await transferRow.getByRole('button', { name: 'Delete' }).click();
     await expect(page.getByText('Transfer to Fun money')).not.toBeVisible();
+  });
+
+  test('deletes an envelope, moving its operations to another envelope', async ({ page }) => {
+    await createEnvelope(page, 'Groceries');
+    await createEnvelope(page, 'Fun money');
+
+    await recordTransaction(page, {
+      type: 'Income',
+      envelope: 'Groceries',
+      amount: '500',
+      name: 'Paycheck',
+    });
+    await recordTransaction(page, {
+      type: 'Income',
+      envelope: 'Fun money',
+      amount: '100',
+      name: 'Bonus',
+    });
+    await transferFunds(page, { from: 'Groceries', to: 'Fun money', amount: '50' });
+
+    // Groceries: 500 - 50 = 450, Fun money: 100 + 50 = 150.
+    await expectEnvelopeBalance(page, 'Groceries', '450.00');
+    await expectEnvelopeBalance(page, 'Fun money', '150.00');
+
+    const card = page.locator('[hlmCard]').filter({ hasText: 'Groceries' });
+    await card.getByRole('link', { name: 'View history' }).click();
+    await expect(page).toHaveURL(/\/budget\/envelopes\/.+/);
+
+    await deleteEnvelopeMovingTo(page, 'Fun money');
+
+    // Groceries is gone; its Paycheck income moved to Fun money and the
+    // transfer between the two collapsed, leaving Fun money at 100 + 500 = 600.
+    await expect(page.getByRole('heading', { name: 'Groceries', exact: true })).not.toBeVisible();
+    await expectEnvelopeBalance(page, 'Fun money', '600.00');
+
+    await page
+      .locator('[hlmCard]')
+      .filter({ hasText: 'Fun money' })
+      .getByRole('link', {
+        name: 'View history',
+      })
+      .click();
+    await expect(page.getByText('Paycheck')).toBeVisible();
   });
 
   test('transfers funds between envelopes and carries balances into the next month', async ({

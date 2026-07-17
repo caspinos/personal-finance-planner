@@ -76,6 +76,12 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 - ✅ Archiving/unarchiving envelopes from the UI (toggle on the per-envelope
   history page, same pattern as net worth account archiving; archived
   envelopes are hidden from the active budget list)
+- ✅ Deleting an envelope from the UI: the user picks another envelope to move
+  all of the deleted envelope's operations (transactions, transfers, recurring
+  rules) into, then it is removed. Done atomically via the
+  `delete_envelope_with_transfer(household_id, envelope_id, target_envelope_id)`
+  SQL function so history is preserved (transfers between the two envelopes
+  collapse and are dropped)
 - ⬜ Recurring transactions
 - ✅ Per-envelope transaction history view with monthly filtering, edit links,
   and delete actions for transactions/transfers

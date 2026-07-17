@@ -68,6 +68,13 @@ export const routes: Routes = [
           import('./features/budget/envelope-form/envelope-form').then((m) => m.EnvelopeForm),
       },
       {
+        path: 'budget/envelopes/:id/delete',
+        loadComponent: () =>
+          import('./features/budget/envelope-delete/envelope-delete').then(
+            (m) => m.EnvelopeDelete,
+          ),
+      },
+      {
         path: 'budget/transactions/new',
         loadComponent: () =>
           import('./features/budget/transaction-form/transaction-form').then(
