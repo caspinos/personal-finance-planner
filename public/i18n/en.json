@@ -102,6 +102,20 @@
     "create": "Create envelope",
     "saveChanges": "Save changes"
   },
+  "envelopeDelete": {
+    "title": "Delete envelope",
+    "description": "Deleting \"{{name}}\" moves all its transactions, transfers, and recurring rules to another envelope, then removes it. This cannot be undone.",
+    "loading": "Loading envelope...",
+    "targetEnvelope": "Move operations to",
+    "chooseTarget": "Choose an envelope",
+    "chooseTargetError": "Choose an envelope to move the operations to.",
+    "noTargetTitle": "No other envelope available",
+    "noTargetDescription": "Create another envelope first — the operations from this one need somewhere to go.",
+    "errorTitle": "Couldn't delete the envelope",
+    "delete": "Delete envelope",
+    "deleting": "Deleting…",
+    "cancel": "Cancel"
+  },
   "transactionForm": {
     "newTitle": "Record a transaction",
     "editTitle": "Edit transaction",
@@ -204,6 +218,7 @@
     "archived": "Archived",
     "archiveEnvelope": "Archive envelope",
     "unarchiveEnvelope": "Unarchive envelope",
+    "deleteEnvelope": "Delete envelope",
     "balanceTitle": "Balance",
     "balanceSubtitle": "As of the end of {{month}}",
     "loadingHistory": "Loading history...",

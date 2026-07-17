@@ -68,6 +68,19 @@ export async function transferFunds(
   await expect(page).toHaveURL('/budget');
 }
 
+/**
+ * Deletes an envelope from its history page, moving all its operations to
+ * another envelope. Assumes the browser is on the envelope's history page.
+ */
+export async function deleteEnvelopeMovingTo(page: Page, target: string): Promise<void> {
+  await page.getByRole('link', { name: 'Delete envelope' }).click();
+  await expect(page).toHaveURL(/\/budget\/envelopes\/.+\/delete/);
+
+  await selectComboboxOption(page, 'Move operations to', target);
+  await page.getByRole('button', { name: 'Delete envelope' }).click();
+  await expect(page).toHaveURL('/budget');
+}
+
 /** Asserts the displayed balance (in PLN) for a given envelope's card on the budget page. */
 export async function expectEnvelopeBalance(
   page: Page,

@@ -9,6 +9,7 @@ import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 import { BudgetService, Envelope, EnvelopeEvent } from '../../../core/budget/budget.service';
+import { HouseholdService } from '../../../core/household/household.service';
 import { LanguageService } from '../../../core/i18n/language.service';
 
 function startOfMonth(date: Date): Date {
@@ -79,6 +80,16 @@ function endOfMonth(date: Date): Date {
                 ) | transloco
               }}
             </button>
+            @if (isOwner()) {
+              <a
+                hlmBtn
+                variant="destructive"
+                size="sm"
+                [routerLink]="['/budget/envelopes', envelope.id, 'delete']"
+              >
+                {{ 'envelopeHistory.deleteEnvelope' | transloco }}
+              </a>
+            }
           }
           <div class="flex items-center gap-2">
             <button
@@ -215,6 +226,11 @@ export class EnvelopeHistory {
   private readonly router = inject(Router);
   private readonly transloco = inject(TranslocoService);
   private readonly language = inject(LanguageService);
+  private readonly households = inject(HouseholdService);
+
+  // Deleting an envelope is owner-only (enforced by RLS on the delete). Hide the
+  // entry point from editors/viewers so they aren't sent into a flow that fails.
+  protected readonly isOwner = computed(() => this.households.currentRole() === 'owner');
 
   protected readonly envelope = signal<Envelope | null>(null);
   protected readonly events = signal<EnvelopeEvent[]>([]);
@@ -401,6 +417,11 @@ export class EnvelopeHistory {
     this.errorMessage.set(null);
 
     try {
+      // Populates currentRole() so the owner-only delete action can be gated.
+      // Non-fatal: if it fails, the role stays null and the delete link is simply
+      // hidden, which is the safe default -- it must not break the history view.
+      void this.households.loadMembers().catch(() => undefined);
+
       const [envelope] = await Promise.all([
         this.budget.loadEnvelope(envelopeId),
         this.budget.loadEnvelopes(),

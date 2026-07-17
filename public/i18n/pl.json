@@ -102,6 +102,20 @@
     "create": "Utwórz kopertę",
     "saveChanges": "Zapisz zmiany"
   },
+  "envelopeDelete": {
+    "title": "Usuń kopertę",
+    "description": "Usunięcie koperty „{{name}}” przeniesie wszystkie jej operacje, przelewy i reguły cykliczne do innej koperty, a następnie ją usunie. Tej operacji nie można cofnąć.",
+    "loading": "Ładowanie koperty...",
+    "targetEnvelope": "Przenieś operacje do",
+    "chooseTarget": "Wybierz kopertę",
+    "chooseTargetError": "Wybierz kopertę, do której przenieść operacje.",
+    "noTargetTitle": "Brak innej dostępnej koperty",
+    "noTargetDescription": "Utwórz najpierw inną kopertę — operacje z tej muszą gdzieś trafić.",
+    "errorTitle": "Nie udało się usunąć koperty",
+    "delete": "Usuń kopertę",
+    "deleting": "Usuwanie…",
+    "cancel": "Anuluj"
+  },
   "transactionForm": {
     "newTitle": "Zapisz operację",
     "editTitle": "Edytuj operację",
@@ -204,6 +218,7 @@
     "archived": "Zarchiwizowana",
     "archiveEnvelope": "Archiwizuj kopertę",
     "unarchiveEnvelope": "Przywróć kopertę",
+    "deleteEnvelope": "Usuń kopertę",
     "balanceTitle": "Saldo",
     "balanceSubtitle": "Na koniec {{month}}",
     "loadingHistory": "Ładowanie historii...",

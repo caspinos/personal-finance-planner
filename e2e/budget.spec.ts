@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { signUpWithHousehold } from './support/auth';
 import {
   createEnvelope,
+  deleteEnvelopeMovingTo,
   expectEnvelopeBalance,
   recordTransaction,
   transferFunds,
@@ -113,6 +114,62 @@ test.describe('Budget envelopes', () => {
     page.once('dialog', (dialog) => dialog.accept());
     await transferRow.getByRole('button', { name: 'Delete' }).click();
     await expect(page.getByText('Transfer to Fun money')).not.toBeVisible();
+  });
+
+  test('deletes an envelope, moving its operations to another envelope', async ({ page }) => {
+    await createEnvelope(page, 'Groceries');
+    await createEnvelope(page, 'Fun money');
+    await createEnvelope(page, 'Savings');
+
+    await recordTransaction(page, {
+      type: 'Income',
+      envelope: 'Groceries',
+      amount: '500',
+      name: 'Paycheck',
+    });
+    await recordTransaction(page, {
+      type: 'Income',
+      envelope: 'Fun money',
+      amount: '100',
+      name: 'Bonus',
+    });
+    // A transfer between the two envelopes involved in the deletion (collapses),
+    // and one to a third envelope (retargeted, not deleted).
+    await transferFunds(page, { from: 'Groceries', to: 'Fun money', amount: '50' });
+    await transferFunds(page, { from: 'Groceries', to: 'Savings', amount: '30' });
+
+    // Groceries: 500 - 50 - 30 = 420, Fun money: 100 + 50 = 150, Savings: 30.
+    await expectEnvelopeBalance(page, 'Groceries', '420.00');
+    await expectEnvelopeBalance(page, 'Fun money', '150.00');
+    await expectEnvelopeBalance(page, 'Savings', '30.00');
+
+    const card = page.locator('[hlmCard]').filter({ hasText: 'Groceries' });
+    await card.getByRole('link', { name: 'View history' }).click();
+    await expect(page).toHaveURL(/\/budget\/envelopes\/.+/);
+
+    await deleteEnvelopeMovingTo(page, 'Fun money');
+
+    // Groceries is gone. Its Paycheck income moved to Fun money; the direct
+    // Groceries→Fun money transfer collapsed (dropped); the Groceries→Savings
+    // transfer was retargeted to Fun money→Savings. Fun money: 100 + 500 - 30 =
+    // 570, Savings unchanged at 30.
+    await expect(page.getByRole('heading', { name: 'Groceries', exact: true })).not.toBeVisible();
+    await expectEnvelopeBalance(page, 'Fun money', '570.00');
+    await expectEnvelopeBalance(page, 'Savings', '30.00');
+
+    await page
+      .locator('[hlmCard]')
+      .filter({ hasText: 'Fun money' })
+      .getByRole('link', { name: 'View history' })
+      .click();
+    // Moved income and the retargeted (not collapsed) transfer both show up.
+    await expect(page.getByText('Paycheck')).toBeVisible();
+    await expect(page.getByText('Transfer to Savings')).toBeVisible();
+    // The Groceries→Fun money transfer collapsed (dropped) rather than surviving
+    // as a self-transfer, so no Fun money ↔ Fun money row remains.
+    await expect(
+      page.locator('li').filter({ hasText: /Transfer (to|from) Fun money/ }),
+    ).not.toBeVisible();
   });
 
   test('transfers funds between envelopes and carries balances into the next month', async ({
