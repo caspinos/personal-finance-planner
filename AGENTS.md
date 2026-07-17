@@ -101,6 +101,8 @@ Project-specific config (see `components.json`):
 
 ## Branches & Deployment
 
-- `main` — default development branch. `.github/workflows/ci.yml` runs build/unit tests and an e2e job against a local Supabase Docker stack (`npx supabase start`/`stop`) on push/PR. No deploy happens from `main`.
-- `prod` — separate branch that CI auto-deploys from: Cloudflare Workers (the app itself, via `wrangler`, config in `wrangler.jsonc`) and Supabase (the remote project, e.g. migrations). Promote to production by merging/PR-ing `main` into `prod`.
+- `main` — the single default branch, and the production branch for both deploy integrations. `.github/workflows/ci.yml` runs build/unit tests and an e2e job against a local Supabase Docker stack (`npx supabase start`/`stop`) on push/PR.
+- **App (Cloudflare Workers):** the Cloudflare Git integration builds and deploys the app (via `wrangler`, config in `wrangler.jsonc`) from `main`.
+- **Database (Supabase):** the Supabase GitHub integration is configured with `main` as its production branch and applies new `supabase/migrations/*` to the remote project when they land on `main`. There is **no `prod` branch** — merging a PR into `main` is what ships to production.
+- Because the app and the database deploy through two independent integrations, a merge can briefly leave the deployed app ahead of the database (e.g. calling an RPC before its migration has applied). If you add a migration, confirm it actually applied to the remote project after merge rather than assuming.
 - Production Supabase URL/anon key live in `src/environments/environment.ts` (committed — the anon/publishable key is safe to commit since access is enforced by Postgres RLS). `src/environments/environment.development.ts` holds local Docker Supabase values and must stay untouched by production config changes.
