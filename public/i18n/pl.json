@@ -121,7 +121,12 @@
     "nameError": "Wprowadź nazwę tej operacji.",
     "errorTitle": "Nie udało się zapisać operacji",
     "save": "Zapisz operację",
-    "saveChanges": "Zapisz zmiany"
+    "saveChanges": "Zapisz zmiany",
+    "amortizeLabel": "Rozłóż ten wydatek w czasie",
+    "amortizeHint": "Zapisuje pełną płatność jednorazowo, ale obciąża budżet równymi ratami miesięcznymi.",
+    "amortizedMonths": "Liczba miesięcy",
+    "amortizedMonthsError": "Podaj całkowitą liczbę miesięcy od 2 do 120.",
+    "amortizePreview": "≈ {{amount}} PLN obciążenia budżetu miesięcznie."
   },
   "bulkFundingForm": {
     "title": "Zasil koperty",
@@ -213,7 +218,11 @@
     "incomingTransfer": "Przychodzący przelew między kopertami",
     "outgoingTransfer": "Wychodzący przelew między kopertami",
     "loadErrorTitle": "Nie udało się załadować historii koperty",
-    "deleteConfirm": "Usunąć tę operację ({{kind}})? Tego nie można cofnąć."
+    "deleteConfirm": "Usunąć tę operację ({{kind}})? Tego nie można cofnąć.",
+    "amortizedCharge": "Amortyzacja",
+    "amortizedChargeBadge": "rata",
+    "amortizedPaymentBadge": "Amortyzowana · {{months}} mies",
+    "amortizedPaymentNote": "{{name}} · rozłożone na okres amortyzacji; nie obniża bezpośrednio budżetu tego miesiąca"
   },
   "history": {
     "backToBudget": "Wróć do budżetu",
@@ -228,7 +237,8 @@
     "expense": "Wydatek",
     "transfer": "Przelew",
     "defaultTransfer": "Przelew między kopertami",
-    "deleteConfirm": "Usunąć tę operację ({{kind}})? Tego nie można cofnąć."
+    "deleteConfirm": "Usunąć tę operację ({{kind}})? Tego nie można cofnąć.",
+    "amortizedBadge": "Amortyzowana · {{months}} mies"
   },
   "netWorth": {
     "title": "Majątek netto",

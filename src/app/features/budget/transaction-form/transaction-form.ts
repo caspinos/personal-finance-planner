@@ -1,5 +1,12 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  AbstractControl,
+  FormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
@@ -25,6 +32,22 @@ function toDateInputValue(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Parses a YYYY-MM-DD input into a local-midnight Date. `new Date('YYYY-MM-DD')`
+ * parses as UTC, so in negative-offset zones the day (and its month) can shift
+ * backwards — which would move an amortization schedule into the prior month.
+ */
+function fromDateInputValue(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/** Rejects non-integer values (e.g. 12.5) so amortized_months stays a clean smallint. */
+function integerValidator(control: AbstractControl): ValidationErrors | null {
+  const value = control.value;
+  return value == null || Number.isInteger(value) ? null : { integer: true };
+}
+
 @Component({
   selector: 'app-transaction-form',
   imports: [
@@ -44,7 +67,9 @@ function toDateInputValue(date: Date): string {
       <div hlmCard class="w-full max-w-sm">
         <div hlmCardHeader>
           <h1 hlmCardTitle>
-            {{ (isEditing() ? 'transactionForm.editTitle' : 'transactionForm.newTitle') | transloco }}
+            {{
+              (isEditing() ? 'transactionForm.editTitle' : 'transactionForm.newTitle') | transloco
+            }}
           </h1>
           <p hlmCardDescription>
             {{
@@ -86,7 +111,9 @@ function toDateInputValue(date: Date): string {
                   [itemToString]="envelopeToString"
                 >
                   <hlm-select-trigger class="w-full">
-                    <hlm-select-value [placeholder]="'transactionForm.chooseEnvelope' | transloco" />
+                    <hlm-select-value
+                      [placeholder]="'transactionForm.chooseEnvelope' | transloco"
+                    />
                   </hlm-select-trigger>
                   <hlm-select-content *hlmSelectPortal>
                     @for (envelope of envelopes(); track envelope.id) {
@@ -119,9 +146,60 @@ function toDateInputValue(date: Date): string {
               </div>
 
               <div hlmField>
-                <label hlmFieldLabel for="occurredOn">{{ 'transactionForm.date' | transloco }}</label>
+                <label hlmFieldLabel for="occurredOn">{{
+                  'transactionForm.date' | transloco
+                }}</label>
                 <input hlmInput id="occurredOn" type="date" formControlName="occurredOn" />
               </div>
+
+              @if (type() === 'expense') {
+                <div hlmField>
+                  <div class="flex items-center gap-2">
+                    <input
+                      id="amortize"
+                      type="checkbox"
+                      class="accent-primary size-4"
+                      formControlName="amortize"
+                    />
+                    <label hlmFieldLabel for="amortize" class="mb-0">
+                      {{ 'transactionForm.amortizeLabel' | transloco }}
+                    </label>
+                  </div>
+                  <p class="text-muted-foreground text-sm">
+                    {{ 'transactionForm.amortizeHint' | transloco }}
+                  </p>
+                </div>
+
+                @if (form.controls.amortize.value) {
+                  <div hlmField>
+                    <label hlmFieldLabel for="amortizedMonths">{{
+                      'transactionForm.amortizedMonths' | transloco
+                    }}</label>
+                    <input
+                      hlmInput
+                      id="amortizedMonths"
+                      type="number"
+                      min="2"
+                      max="120"
+                      step="1"
+                      formControlName="amortizedMonths"
+                    />
+                    @if (
+                      form.controls.amortizedMonths.invalid &&
+                      (form.controls.amortizedMonths.touched || submitted())
+                    ) {
+                      <hlm-field-error forceShow>{{
+                        'transactionForm.amortizedMonthsError' | transloco
+                      }}</hlm-field-error>
+                    }
+                    @if (amortizedMonthlyPreview(); as preview) {
+                      <p class="text-muted-foreground text-sm">
+                        {{ 'transactionForm.amortizePreview' | transloco: { amount: preview } }}
+                      </p>
+                    }
+                  </div>
+                }
+              }
 
               <div hlmField>
                 <label hlmFieldLabel for="name">{{ 'transactionForm.name' | transloco }}</label>
@@ -158,7 +236,10 @@ function toDateInputValue(date: Date): string {
                   <hlm-spinner />
                   {{ 'common.saving' | transloco }}
                 } @else {
-                  {{ (isEditing() ? 'transactionForm.saveChanges' : 'transactionForm.save') | transloco }}
+                  {{
+                    (isEditing() ? 'transactionForm.saveChanges' : 'transactionForm.save')
+                      | transloco
+                  }}
                 }
               </button>
             </form>
@@ -193,10 +274,32 @@ export class TransactionForm {
     amount: [0, [Validators.required, Validators.min(0.01)]],
     occurredOn: [toDateInputValue(new Date()), Validators.required],
     name: ['', [Validators.required, Validators.minLength(1)]],
+    amortize: [false],
+    amortizedMonths: [12, [Validators.min(2), Validators.max(120), integerValidator]],
   });
 
   constructor() {
+    // The months field only matters when amortization is on; make it required
+    // then (and cleared otherwise) so an empty/blank value can't silently drop
+    // amortization or reach the smallint column as null.
+    this.form.controls.amortize.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((amortize) => this.applyAmortizedMonthsValidators(amortize));
+
     void this.loadInitialData();
+  }
+
+  private applyAmortizedMonthsValidators(amortize: boolean): void {
+    const control = this.form.controls.amortizedMonths;
+    // When amortization is off the field is hidden and ignored on submit, so it
+    // carries no validators — otherwise a stale out-of-range value would keep
+    // the form invalid and silently block submission with no visible error.
+    control.setValidators(
+      amortize
+        ? [Validators.required, Validators.min(2), Validators.max(120), integerValidator]
+        : [],
+    );
+    control.updateValueAndValidity({ emitEvent: false });
   }
 
   protected onTypeChange(
@@ -204,7 +307,26 @@ export class TransactionForm {
   ): void {
     if (value === 'expense' || value === 'income') {
       this.type.set(value);
+      // Amortization is expense-only; clear it when switching to income.
+      if (value === 'income') {
+        this.form.controls.amortize.setValue(false);
+      }
     }
+  }
+
+  /** Rounded monthly slice preview (total / months), or null when not applicable. */
+  protected amortizedMonthlyPreview(): string | null {
+    const { amount, amortize, amortizedMonths } = this.form.getRawValue();
+    if (
+      this.type() !== 'expense' ||
+      !amortize ||
+      !amount ||
+      !amortizedMonths ||
+      amortizedMonths < 2
+    ) {
+      return null;
+    }
+    return (Math.round((amount / amortizedMonths) * 100) / 100).toFixed(2);
   }
 
   protected onNameInput(): void {
@@ -226,13 +348,14 @@ export class TransactionForm {
     this.errorMessage.set(null);
 
     try {
-      const { amount, occurredOn, name } = this.form.getRawValue();
+      const { amount, occurredOn, name, amortize, amortizedMonths } = this.form.getRawValue();
       const input = {
         envelopeId: this.envelopeId()!,
         type: this.type(),
         amount,
-        occurredOn: new Date(occurredOn),
+        occurredOn: fromDateInputValue(occurredOn),
         name,
+        amortizedMonths: this.type() === 'expense' && amortize ? amortizedMonths : null,
       };
 
       if (this.transactionId()) {
@@ -268,6 +391,8 @@ export class TransactionForm {
           amount: Number(transaction.amount),
           occurredOn: transaction.occurred_on,
           name: transaction.name,
+          amortize: transaction.amortized_months !== null,
+          amortizedMonths: transaction.amortized_months ?? 12,
         });
       }
     } catch (error) {

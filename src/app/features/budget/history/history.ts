@@ -100,6 +100,13 @@ function endOfMonth(date: Date): Date {
                   <div class="flex min-w-0 flex-col gap-1">
                     <div class="flex flex-wrap items-center gap-2">
                       <span class="font-medium">{{ eventTitle(event) }}</span>
+                      @if (eventBadge(event); as badge) {
+                        <span
+                          class="border-border text-muted-foreground rounded-full border px-2 py-0.5 text-xs"
+                        >
+                          {{ badge }}
+                        </span>
+                      }
                       <span class="text-muted-foreground text-sm">
                         {{ event.occurred_on | date: 'mediumDate' }}
                       </span>
@@ -179,6 +186,15 @@ export class History {
     }
 
     return event.description || this.transloco.translate('history.defaultTransfer');
+  }
+
+  protected eventBadge(event: GlobalEvent): string | null {
+    if (event.kind === 'transaction' && event.amortized_months !== null) {
+      return this.transloco.translate('history.amortizedBadge', {
+        months: event.amortized_months,
+      });
+    }
+    return null;
   }
 
   protected eventEnvelopes(event: GlobalEvent): string {

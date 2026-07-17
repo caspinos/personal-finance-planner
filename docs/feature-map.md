@@ -79,6 +79,14 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 - ⬜ Recurring transactions
 - ✅ Per-envelope transaction history view with monthly filtering, edit links,
   and delete actions for transactions/transfers
+- ✅ Amortized (spread-over-time) expenses: a large, irregular payment (e.g. a
+  yearly insurance premium) is recorded once but charges the envelope budget in
+  equal monthly slices instead of a single lump. The payment stays in history,
+  flagged and budget-neutral; the derived slices consume the budget.
+  `get_amortized_charges(household_id, from, to)` generates the slices on the
+  fly (never stored) and `get_envelope_balances` excludes the lump and subtracts
+  the slices due so far — so editing the header (amount, months, date) always
+  re-derives a consistent state
 
 ## 3. Net worth & investments — Stage 3
 

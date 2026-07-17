@@ -4,7 +4,7 @@ import { expect, type Page } from '@playwright/test';
 export async function selectComboboxOption(
   page: Page,
   comboboxName: string,
-  optionName: string
+  optionName: string,
 ): Promise<void> {
   await page.getByRole('combobox', { name: comboboxName }).click();
   await page.getByRole('option', { name: optionName, exact: true }).click();
@@ -23,7 +23,14 @@ export async function createEnvelope(page: Page, name: string): Promise<void> {
 /** Records an expense/income transaction from the budget page. Name is required by the form. */
 export async function recordTransaction(
   page: Page,
-  options: { type: 'Expense' | 'Income'; envelope: string; amount: string; name: string }
+  options: {
+    type: 'Expense' | 'Income';
+    envelope: string;
+    amount: string;
+    name: string;
+    /** When set on an expense, spreads it across this many months (amortization). */
+    amortizeMonths?: string;
+  },
 ): Promise<void> {
   await page.getByRole('link', { name: 'Record transaction' }).click();
   await expect(page).toHaveURL('/budget/transactions/new');
@@ -36,6 +43,11 @@ export async function recordTransaction(
   await page.getByLabel('Amount').fill(options.amount);
   await page.getByLabel('Name').fill(options.name);
 
+  if (options.type === 'Expense' && options.amortizeMonths) {
+    await page.getByLabel('Spread this expense over time').check();
+    await page.getByLabel('Number of months').fill(options.amortizeMonths);
+  }
+
   await page.getByRole('button', { name: 'Save transaction' }).click();
   await expect(page).toHaveURL('/budget');
 }
@@ -43,7 +55,7 @@ export async function recordTransaction(
 /** Transfers funds between two envelopes from the budget page. */
 export async function transferFunds(
   page: Page,
-  options: { from: string; to: string; amount: string }
+  options: { from: string; to: string; amount: string },
 ): Promise<void> {
   await page.getByRole('link', { name: 'Transfer' }).click();
   await expect(page).toHaveURL('/budget/transfers/new');
@@ -60,7 +72,7 @@ export async function transferFunds(
 export async function expectEnvelopeBalance(
   page: Page,
   envelopeName: string,
-  expectedBalance: string
+  expectedBalance: string,
 ): Promise<void> {
   const card = page.locator('[hlmCard]').filter({ hasText: envelopeName });
   await expect(card.getByText(`${expectedBalance} PLN`, { exact: true })).toBeVisible();
