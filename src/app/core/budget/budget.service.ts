@@ -24,6 +24,8 @@ export interface BudgetTransaction {
   currency: string;
   occurred_on: string;
   name: string;
+  amortized_months: number | null;
+  amortized_start_on: string | null;
   created_by: string;
   created_at: string;
 }
@@ -59,6 +61,23 @@ export interface EnvelopeTransactionEvent {
   name: string;
   transaction_type: BudgetTransactionType;
   envelope_id: string;
+  amortized_months: number | null;
+}
+
+/**
+ * A single derived monthly slice of an amortized expense. Not a stored record:
+ * it is computed from the source transaction's amortization parameters, and it
+ * (not the payment) is what consumes the envelope's budget for its month.
+ */
+export interface EnvelopeAmortizedChargeEvent {
+  kind: 'amortized_charge';
+  id: string;
+  occurred_on: string;
+  amount: number;
+  currency: string;
+  name: string;
+  envelope_id: string;
+  source_transaction_id: string;
 }
 
 export interface EnvelopeTransferEvent {
@@ -74,7 +93,16 @@ export interface EnvelopeTransferEvent {
   other_envelope_name: string;
 }
 
-export type EnvelopeEvent = EnvelopeTransactionEvent | EnvelopeTransferEvent;
+export type EnvelopeEvent =
+  EnvelopeTransactionEvent | EnvelopeTransferEvent | EnvelopeAmortizedChargeEvent;
+
+export interface AmortizedCharge {
+  transaction_id: string;
+  envelope_id: string;
+  name: string;
+  month: string;
+  amount: number;
+}
 
 export interface GlobalTransactionEvent {
   kind: 'transaction';
@@ -86,6 +114,7 @@ export interface GlobalTransactionEvent {
   transaction_type: BudgetTransactionType;
   envelope_id: string;
   envelope_name: string;
+  amortized_months: number | null;
 }
 
 export interface GlobalTransferEvent {
@@ -123,6 +152,26 @@ function toDateOnly(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+/**
+ * Normalizes amortization input into the two columns stored on a transaction.
+ * Amortization is expense-only, so an income transaction always clears it. The
+ * schedule starts at the first day of the payment's month, so editing the
+ * transaction date shifts the whole schedule (invariant #3: header edits always
+ * re-derive the slices, which are computed downstream, never stored).
+ */
+function resolveAmortization(
+  type: BudgetTransactionType,
+  amortizedMonths: number | null | undefined,
+  occurredOn: Date,
+): { months: number | null; startOn: string | null } {
+  if (type !== 'expense' || !amortizedMonths || amortizedMonths < 2) {
+    return { months: null, startOn: null };
+  }
+
+  const startOfMonth = new Date(occurredOn.getFullYear(), occurredOn.getMonth(), 1);
+  return { months: amortizedMonths, startOn: toDateOnly(startOfMonth) };
 }
 
 function nextOccurrence(dayOfMonth: number, from: Date): Date {
@@ -235,10 +284,17 @@ export class BudgetService {
       .order('occurred_on', { ascending: false })
       .order('created_at', { ascending: false });
 
+    const chargesQuery = this.supabase.rpc('get_amortized_charges', {
+      p_household_id: householdId,
+      p_from: from,
+      p_to: to,
+    });
+
     const [
       { data: transactions, error: transactionsError },
       { data: transfers, error: transfersError },
-    ] = await Promise.all([transactionQuery, transferQuery]);
+      { data: charges, error: chargesError },
+    ] = await Promise.all([transactionQuery, transferQuery, chargesQuery]);
 
     if (transactionsError) {
       throw transactionsError;
@@ -246,6 +302,10 @@ export class BudgetService {
 
     if (transfersError) {
       throw transfersError;
+    }
+
+    if (chargesError) {
+      throw chargesError;
     }
 
     const envelopes = await this.ensureEnvelopesLoaded();
@@ -261,7 +321,20 @@ export class BudgetService {
         name: transaction.name,
         transaction_type: transaction.type,
         envelope_id: transaction.envelope_id,
+        amortized_months: transaction.amortized_months ?? null,
       })),
+      ...((charges ?? []) as AmortizedCharge[])
+        .filter((charge) => charge.envelope_id === input.envelopeId)
+        .map<EnvelopeEvent>((charge) => ({
+          kind: 'amortized_charge',
+          id: `${charge.transaction_id}:${charge.month}`,
+          occurred_on: charge.month,
+          amount: Number(charge.amount),
+          currency: 'PLN',
+          name: charge.name,
+          envelope_id: charge.envelope_id,
+          source_transaction_id: charge.transaction_id,
+        })),
       ...(transfers ?? []).map<EnvelopeEvent>((transfer) => {
         const direction = transfer.to_envelope_id === input.envelopeId ? 'in' : 'out';
         const otherEnvelopeId =
@@ -334,6 +407,7 @@ export class BudgetService {
         transaction_type: transaction.type,
         envelope_id: transaction.envelope_id,
         envelope_name: envelopeName(transaction.envelope_id),
+        amortized_months: transaction.amortized_months ?? null,
       })),
       ...(transfers ?? []).map<GlobalEvent>((transfer) => ({
         kind: 'transfer',
@@ -429,9 +503,12 @@ export class BudgetService {
     amount: number;
     occurredOn: Date;
     name: string;
+    amortizedMonths?: number | null;
   }): Promise<BudgetTransaction> {
     const householdId = this.requireHouseholdId();
     const userId = this.requireUserId();
+
+    const amortization = resolveAmortization(input.type, input.amortizedMonths, input.occurredOn);
 
     const { data, error } = await this.supabase
       .from('budget_transactions')
@@ -442,6 +519,8 @@ export class BudgetService {
         amount: input.amount,
         occurred_on: toDateOnly(input.occurredOn),
         name: input.name,
+        amortized_months: amortization.months,
+        amortized_start_on: amortization.startOn,
         created_by: userId,
       })
       .select()
@@ -462,9 +541,12 @@ export class BudgetService {
       amount: number;
       occurredOn: Date;
       name: string;
+      amortizedMonths?: number | null;
     },
   ): Promise<BudgetTransaction> {
     const householdId = this.requireHouseholdId();
+
+    const amortization = resolveAmortization(input.type, input.amortizedMonths, input.occurredOn);
 
     const { data, error } = await this.supabase
       .from('budget_transactions')
@@ -474,6 +556,8 @@ export class BudgetService {
         amount: input.amount,
         occurred_on: toDateOnly(input.occurredOn),
         name: input.name,
+        amortized_months: amortization.months,
+        amortized_start_on: amortization.startOn,
       })
       .eq('household_id', householdId)
       .eq('id', transactionId)

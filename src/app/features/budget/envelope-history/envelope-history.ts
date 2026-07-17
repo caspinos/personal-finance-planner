@@ -53,7 +53,12 @@ function endOfMonth(date: Date): Date {
 
         <div class="flex flex-wrap items-center gap-2">
           @if (envelope(); as envelope) {
-            <a hlmBtn variant="outline" size="sm" [routerLink]="['/budget/envelopes', envelope.id, 'edit']">
+            <a
+              hlmBtn
+              variant="outline"
+              size="sm"
+              [routerLink]="['/budget/envelopes', envelope.id, 'edit']"
+            >
               {{ 'budget.rename' | transloco }}
             </a>
             <button
@@ -68,8 +73,10 @@ function endOfMonth(date: Date): Date {
                 <hlm-spinner />
               }
               {{
-                (envelope.archived ? 'envelopeHistory.unarchiveEnvelope' : 'envelopeHistory.archiveEnvelope')
-                  | transloco
+                (envelope.archived
+                  ? 'envelopeHistory.unarchiveEnvelope'
+                  : 'envelopeHistory.archiveEnvelope'
+                ) | transloco
               }}
             </button>
           }
@@ -139,7 +146,9 @@ function endOfMonth(date: Date): Date {
               {{ 'envelopeHistory.loadingActivity' | transloco }}
             </div>
           } @else if (events().length === 0) {
-            <p class="text-muted-foreground text-sm">{{ 'envelopeHistory.noActivity' | transloco }}</p>
+            <p class="text-muted-foreground text-sm">
+              {{ 'envelopeHistory.noActivity' | transloco }}
+            </p>
           } @else {
             <ul class="flex flex-col gap-3">
               @for (event of events(); track event.kind + event.id) {
@@ -149,6 +158,13 @@ function endOfMonth(date: Date): Date {
                   <div class="flex min-w-0 flex-col gap-1">
                     <div class="flex flex-wrap items-center gap-2">
                       <span class="font-medium">{{ eventTitle(event) }}</span>
+                      @if (eventBadge(event); as badge) {
+                        <span
+                          class="border-border text-muted-foreground rounded-full border px-2 py-0.5 text-xs"
+                        >
+                          {{ badge }}
+                        </span>
+                      }
                       <span class="text-muted-foreground text-sm">
                         {{ event.occurred_on | date: 'mediumDate' }}
                       </span>
@@ -161,26 +177,28 @@ function endOfMonth(date: Date): Date {
                   <div class="flex shrink-0 flex-wrap items-center gap-2">
                     <span
                       class="min-w-28 text-right font-medium"
-                      [class.text-destructive]="signedAmount(event) < 0"
+                      [class.text-destructive]="isNegative(event)"
                     >
-                      {{ signedAmount(event) | number: '1.2-2' }} {{ event.currency }}
+                      {{ displayAmount(event) | number: '1.2-2' }} {{ event.currency }}
                     </span>
                     <a hlmBtn variant="outline" size="sm" [routerLink]="editLink(event)">
                       {{ 'common.edit' | transloco }}
                     </a>
-                    <button
-                      hlmBtn
-                      variant="destructive"
-                      size="sm"
-                      type="button"
-                      [disabled]="deletingKey() === event.kind + event.id"
-                      (click)="deleteEvent(event)"
-                    >
-                      @if (deletingKey() === event.kind + event.id) {
-                        <hlm-spinner />
-                      }
-                      {{ 'common.delete' | transloco }}
-                    </button>
+                    @if (event.kind !== 'amortized_charge') {
+                      <button
+                        hlmBtn
+                        variant="destructive"
+                        size="sm"
+                        type="button"
+                        [disabled]="deletingKey() === event.kind + event.id"
+                        (click)="deleteEvent(event)"
+                      >
+                        @if (deletingKey() === event.kind + event.id) {
+                          <hlm-spinner />
+                        }
+                        {{ 'common.delete' | transloco }}
+                      </button>
+                    }
                   </div>
                 </li>
               }
@@ -233,6 +251,10 @@ export class EnvelopeHistory {
   }
 
   protected eventTitle(event: EnvelopeEvent): string {
+    if (event.kind === 'amortized_charge') {
+      return this.transloco.translate('envelopeHistory.amortizedCharge');
+    }
+
     if (event.kind === 'transaction') {
       return this.transloco.translate(
         event.transaction_type === 'income' ? 'envelopeHistory.income' : 'envelopeHistory.expense',
@@ -245,8 +267,33 @@ export class EnvelopeHistory {
     );
   }
 
+  protected eventBadge(event: EnvelopeEvent): string | null {
+    if (event.kind === 'amortized_charge') {
+      return this.transloco.translate('envelopeHistory.amortizedChargeBadge');
+    }
+
+    if (event.kind === 'transaction' && event.amortized_months !== null) {
+      return this.transloco.translate('envelopeHistory.amortizedPaymentBadge', {
+        months: event.amortized_months,
+      });
+    }
+
+    return null;
+  }
+
   protected eventDescription(event: EnvelopeEvent): string {
+    if (event.kind === 'amortized_charge') {
+      return event.name;
+    }
+
     if (event.kind === 'transaction') {
+      // An amortized payment doesn't reduce this envelope's budget directly;
+      // the monthly slices do. Make that explicit in the history row.
+      if (event.amortized_months !== null) {
+        return this.transloco.translate('envelopeHistory.amortizedPaymentNote', {
+          name: event.name,
+        });
+      }
       return event.name;
     }
 
@@ -260,15 +307,37 @@ export class EnvelopeHistory {
     );
   }
 
-  protected signedAmount(event: EnvelopeEvent): number {
+  /** Signed amount actually shown on the row. */
+  protected displayAmount(event: EnvelopeEvent): number {
+    if (event.kind === 'amortized_charge') {
+      return -event.amount;
+    }
+
     if (event.kind === 'transaction') {
+      // Budget-neutral: shown as the full paid amount without a sign, since the
+      // slices (not the payment) move the balance.
+      if (event.amortized_months !== null) {
+        return event.amount;
+      }
       return event.transaction_type === 'income' ? event.amount : -event.amount;
     }
 
     return event.direction === 'in' ? event.amount : -event.amount;
   }
 
+  /** Whether the amount should read as a budget outflow (destructive styling). */
+  protected isNegative(event: EnvelopeEvent): boolean {
+    if (event.kind === 'transaction' && event.amortized_months !== null) {
+      return false;
+    }
+    return this.displayAmount(event) < 0;
+  }
+
   protected editLink(event: EnvelopeEvent): string {
+    if (event.kind === 'amortized_charge') {
+      return `/budget/transactions/${event.source_transaction_id}/edit`;
+    }
+
     return event.kind === 'transaction'
       ? `/budget/transactions/${event.id}/edit`
       : `/budget/transfers/${event.id}/edit`;
@@ -289,6 +358,12 @@ export class EnvelopeHistory {
   }
 
   protected async deleteEvent(event: EnvelopeEvent): Promise<void> {
+    // Amortization slices are derived, not stored: edit/delete the source
+    // transaction instead. The delete control is hidden for them anyway.
+    if (event.kind === 'amortized_charge') {
+      return;
+    }
+
     const confirmed = window.confirm(
       this.transloco.translate('envelopeHistory.deleteConfirm', { kind: event.kind }),
     );

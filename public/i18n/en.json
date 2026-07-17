@@ -121,7 +121,12 @@
     "nameError": "Enter a name for this transaction.",
     "errorTitle": "Couldn't record the transaction",
     "save": "Save transaction",
-    "saveChanges": "Save changes"
+    "saveChanges": "Save changes",
+    "amortizeLabel": "Spread this expense over time",
+    "amortizeHint": "Records the full payment once, but charges the budget in equal monthly slices.",
+    "amortizedMonths": "Number of months",
+    "amortizedMonthsError": "Enter between 2 and 120 months.",
+    "amortizePreview": "≈ {{amount}} PLN charged to the budget each month."
   },
   "bulkFundingForm": {
     "title": "Fund envelopes",
@@ -213,7 +218,11 @@
     "incomingTransfer": "Incoming envelope transfer",
     "outgoingTransfer": "Outgoing envelope transfer",
     "loadErrorTitle": "Couldn't load envelope history",
-    "deleteConfirm": "Delete this {{kind}}? This cannot be undone."
+    "deleteConfirm": "Delete this {{kind}}? This cannot be undone.",
+    "amortizedCharge": "Amortization",
+    "amortizedChargeBadge": "slice",
+    "amortizedPaymentBadge": "Amortized · {{months}} mo",
+    "amortizedPaymentNote": "{{name}} · spread over the amortization window; does not reduce this month’s budget directly"
   },
   "history": {
     "backToBudget": "Back to budget",
@@ -228,7 +237,8 @@
     "expense": "Expense",
     "transfer": "Transfer",
     "defaultTransfer": "Envelope transfer",
-    "deleteConfirm": "Delete this {{kind}}? This cannot be undone."
+    "deleteConfirm": "Delete this {{kind}}? This cannot be undone.",
+    "amortizedBadge": "Amortized · {{months}} mo"
   },
   "netWorth": {
     "title": "Net worth",
