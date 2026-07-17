@@ -100,6 +100,7 @@ export interface AmortizedCharge {
   transaction_id: string;
   envelope_id: string;
   name: string;
+  currency: string;
   month: string;
   amount: number;
 }
@@ -330,7 +331,7 @@ export class BudgetService {
           id: `${charge.transaction_id}:${charge.month}`,
           occurred_on: charge.month,
           amount: Number(charge.amount),
-          currency: 'PLN',
+          currency: charge.currency,
           name: charge.name,
           envelope_id: charge.envelope_id,
           source_transaction_id: charge.transaction_id,

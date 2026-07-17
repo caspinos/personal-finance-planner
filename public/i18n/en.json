@@ -125,7 +125,7 @@
     "amortizeLabel": "Spread this expense over time",
     "amortizeHint": "Records the full payment once, but charges the budget in equal monthly slices.",
     "amortizedMonths": "Number of months",
-    "amortizedMonthsError": "Enter between 2 and 120 months.",
+    "amortizedMonthsError": "Enter a whole number of months between 2 and 120.",
     "amortizePreview": "≈ {{amount}} PLN charged to the budget each month."
   },
   "bulkFundingForm": {

@@ -45,7 +45,14 @@ alter table public.budget_transactions
 -- Security invoker (default), so RLS on budget_transactions applies to the
 -- caller -- a member only ever sees their own household's slices.
 create function public.get_amortized_charges(p_household_id uuid, p_from date, p_to date)
-returns table (transaction_id uuid, envelope_id uuid, name text, month date, amount numeric)
+returns table (
+  transaction_id uuid,
+  envelope_id uuid,
+  name text,
+  currency text,
+  month date,
+  amount numeric
+)
 language sql
 stable
 as $$
@@ -53,6 +60,7 @@ as $$
     bt.id as transaction_id,
     bt.envelope_id,
     bt.name,
+    bt.currency,
     (date_trunc('month', bt.amortized_start_on) + make_interval(months => gs.i))::date as month,
     case
       when gs.i = bt.amortized_months - 1

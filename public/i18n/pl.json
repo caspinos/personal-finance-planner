@@ -125,7 +125,7 @@
     "amortizeLabel": "Rozłóż ten wydatek w czasie",
     "amortizeHint": "Zapisuje pełną płatność jednorazowo, ale obciąża budżet równymi ratami miesięcznymi.",
     "amortizedMonths": "Liczba miesięcy",
-    "amortizedMonthsError": "Podaj od 2 do 120 miesięcy.",
+    "amortizedMonthsError": "Podaj całkowitą liczbę miesięcy od 2 do 120.",
     "amortizePreview": "≈ {{amount}} PLN obciążenia budżetu miesięcznie."
   },
   "bulkFundingForm": {

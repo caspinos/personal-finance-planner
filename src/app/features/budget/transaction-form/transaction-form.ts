@@ -1,5 +1,12 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  AbstractControl,
+  FormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
@@ -23,6 +30,12 @@ function toDateInputValue(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+/** Rejects non-integer values (e.g. 12.5) so amortized_months stays a clean smallint. */
+function integerValidator(control: AbstractControl): ValidationErrors | null {
+  const value = control.value;
+  return value == null || Number.isInteger(value) ? null : { integer: true };
 }
 
 @Component({
@@ -162,7 +175,8 @@ function toDateInputValue(date: Date): string {
                       formControlName="amortizedMonths"
                     />
                     @if (
-                      form.controls.amortizedMonths.invalid && form.controls.amortizedMonths.touched
+                      form.controls.amortizedMonths.invalid &&
+                      (form.controls.amortizedMonths.touched || submitted())
                     ) {
                       <hlm-field-error forceShow>{{
                         'transactionForm.amortizedMonthsError' | transloco
@@ -251,11 +265,25 @@ export class TransactionForm {
     occurredOn: [toDateInputValue(new Date()), Validators.required],
     name: ['', [Validators.required, Validators.minLength(1)]],
     amortize: [false],
-    amortizedMonths: [12, [Validators.min(2), Validators.max(120)]],
+    amortizedMonths: [12, [Validators.min(2), Validators.max(120), integerValidator]],
   });
 
   constructor() {
+    // The months field only matters when amortization is on; make it required
+    // then (and cleared otherwise) so an empty/blank value can't silently drop
+    // amortization or reach the smallint column as null.
+    this.form.controls.amortize.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((amortize) => this.applyAmortizedMonthsValidators(amortize));
+
     void this.loadInitialData();
+  }
+
+  private applyAmortizedMonthsValidators(amortize: boolean): void {
+    const control = this.form.controls.amortizedMonths;
+    const validators = [Validators.min(2), Validators.max(120), integerValidator];
+    control.setValidators(amortize ? [Validators.required, ...validators] : validators);
+    control.updateValueAndValidity({ emitEvent: false });
   }
 
   protected onTypeChange(
