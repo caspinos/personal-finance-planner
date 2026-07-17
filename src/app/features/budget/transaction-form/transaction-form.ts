@@ -32,6 +32,16 @@ function toDateInputValue(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Parses a YYYY-MM-DD input into a local-midnight Date. `new Date('YYYY-MM-DD')`
+ * parses as UTC, so in negative-offset zones the day (and its month) can shift
+ * backwards — which would move an amortization schedule into the prior month.
+ */
+function fromDateInputValue(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 /** Rejects non-integer values (e.g. 12.5) so amortized_months stays a clean smallint. */
 function integerValidator(control: AbstractControl): ValidationErrors | null {
   const value = control.value;
@@ -281,8 +291,14 @@ export class TransactionForm {
 
   private applyAmortizedMonthsValidators(amortize: boolean): void {
     const control = this.form.controls.amortizedMonths;
-    const validators = [Validators.min(2), Validators.max(120), integerValidator];
-    control.setValidators(amortize ? [Validators.required, ...validators] : validators);
+    // When amortization is off the field is hidden and ignored on submit, so it
+    // carries no validators — otherwise a stale out-of-range value would keep
+    // the form invalid and silently block submission with no visible error.
+    control.setValidators(
+      amortize
+        ? [Validators.required, Validators.min(2), Validators.max(120), integerValidator]
+        : [],
+    );
     control.updateValueAndValidity({ emitEvent: false });
   }
 
@@ -337,7 +353,7 @@ export class TransactionForm {
         envelopeId: this.envelopeId()!,
         type: this.type(),
         amount,
-        occurredOn: new Date(occurredOn),
+        occurredOn: fromDateInputValue(occurredOn),
         name,
         amortizedMonths: this.type() === 'expense' && amortize ? amortizedMonths : null,
       };
