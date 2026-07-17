@@ -165,6 +165,11 @@ test.describe('Budget envelopes', () => {
     // Moved income and the retargeted (not collapsed) transfer both show up.
     await expect(page.getByText('Paycheck')).toBeVisible();
     await expect(page.getByText('Transfer to Savings')).toBeVisible();
+    // The Groceries→Fun money transfer collapsed (dropped) rather than surviving
+    // as a self-transfer, so no Fun money ↔ Fun money row remains.
+    await expect(
+      page.locator('li').filter({ hasText: /Transfer (to|from) Fun money/ }),
+    ).not.toBeVisible();
   });
 
   test('transfers funds between envelopes and carries balances into the next month', async ({
