@@ -1,5 +1,5 @@
 -- Stage 2 foundations: budget envelopes, transactions, and transfers.
--- Balances are derived dynamically (event-sourced) rather than stored.
+-- Balances are derived dynamically (event-based) rather than stored.
 
 create function public.is_household_editor(p_household_id uuid)
 returns boolean
