@@ -60,7 +60,7 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 - ✅ `envelopes` table (name, household, archived flag) with RLS
   (`owner`/`editor` write, all members read)
 - ✅ `budget_transactions` (expense/income events) and `envelope_transfers`
-  as immutable events, with RLS + grants
+  as individual event rows, with RLS + grants
 - ✅ `get_envelope_balances(household_id, as_of)` SQL function derives
   cumulative balances dynamically (no stored running totals), so
   surpluses/deficits naturally carry over between months
@@ -102,7 +102,7 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   (`owner`/`editor` write, all members read)
 - ✅ `asset_valuations` — manual dated valuation snapshots per account
   (`value`, `contribution_amount` to distinguish contribution vs.
-  market/FX movement, optional note), immutable event-style rows with RLS
+  market/FX movement, optional note), event-style rows with RLS
 - ✅ `get_net_worth_summary(household_id, as_of)` SQL function derives each
   account's latest valuation as of a date and signs liabilities negative
   (no stored running totals)

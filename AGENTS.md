@@ -7,7 +7,7 @@ This is **Personal Finance Planner** — a web app for tracking expenses, envelo
 
 - **Frontend:** Angular (standalone components, signals) + TypeScript
 - **Backend:** Supabase (Postgres, Auth, Storage, RLS-based authorization)
-- **Data model:** event-sourced — financial transactions are recorded as immutable events; current/periodic states are derived dynamically (snapshots/materialized views may be introduced later for performance)
+- **Data model:** event-based — financial operations are recorded as individual event/transaction rows; current and periodic states are not stored but derived dynamically from those rows, which keeps derived values consistent by construction (snapshots/materialized views may be introduced later for performance)
 - **Multi-tenancy:** every domain record belongs to a `household`; access is controlled via `household_members` roles (`owner`, `editor`, `viewer`) enforced through Postgres RLS
 - **Multi-currency:** required from the start — transactional currencies, a base currency for analysis, and historical exchange rates
 - **Core domains:** budget envelopes (income allocation, expenses, transfers, recurring transactions) and assets/net worth (accounts, holdings, valuations, liabilities)
