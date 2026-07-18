@@ -4,7 +4,7 @@
 -- an investment account can still carry a manual valuation, and can
 -- optionally break its value down into individual holdings tracked here.
 --
--- Quantity and market value are derived (event-sourced), consistent with
+-- Quantity and market value are derived (event-based), consistent with
 -- the rest of the app: no stored running totals. Average cost is a simple
 -- weighted-average of all buys (not FIFO/lot-based), which is an accepted
 -- simplification for now -- see docs/feature-map.md.

@@ -6,9 +6,11 @@ A web app for household finances: envelope-style budgeting and net worth /
 investment tracking, with data shared across household members.
 
 Built with Angular (standalone components, signals) on top of Supabase
-(Postgres, Auth, Row-Level Security). Financial data is modeled as immutable,
-event-sourced records — transactions and valuations are never mutated in
-place; balances and positions are derived dynamically from the event history.
+(Postgres, Auth, Row-Level Security). Financial data is modeled around event-based
+records — transactions are recorded as individual dated operations and net-worth
+accounts get dated valuation snapshots — and balances and positions are derived
+dynamically from that history rather than stored, so derived values stay
+consistent by construction.
 
 ## Features
 
