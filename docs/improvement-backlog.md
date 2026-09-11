@@ -80,7 +80,7 @@ reviewed.
   fallback in mind (the `ngsw.json` and `manifest` must be served as assets).
 - **Acceptance:** Lighthouse "installable" passes on the production build.
 
-### A5. Local Supabase `site_url` / password policy do not match the app (P2, S) 🔍
+### A5. Local Supabase auth redirect origin does not match the app (P2, S) 🔍
 - **Files:** `supabase/config.toml`
 - **Problem:** `[auth] site_url = "http://127.0.0.1:3000"` while the app runs
   on `http://localhost:4200`; any auth email link (confirmation, password
@@ -88,8 +88,10 @@ reviewed.
   `minimum_password_length = 6` already matches the Register page's
   `Validators.minLength(6)`; verify the production project's password policy
   separately.)
-- **Proposed change:** set `site_url`/`additional_redirect_urls` to
-  `http://localhost:4200`.
+- **Proposed change:** in `supabase/config.toml` `[auth]` set
+  `site_url = "http://localhost:4200"` and
+  `additional_redirect_urls = ["http://localhost:4200", "http://127.0.0.1:4200"]`
+  (the second key is a TOML array).
 - **Acceptance:** local password-reset flow (once implemented, see C-items)
   lands on the app.
 
@@ -291,8 +293,16 @@ reviewed.
 - **Problem:** The column exists (default `PLN`) but the sum mixes all
   currencies and the base conversion assumes PLN ("product decision: budget is
   PLN-only"). Either the column is dead, or the function is wrong.
-- **Proposed change:** decide: (a) drop the column and any UI for it, or (b)
-  convert per transaction with `get_exchange_rate(currency, occurred_on)`.
+- **Proposed change:** decide: (a) drop the column and any UI for it (the
+  simplest option and consistent with the current "PLN-only" decision), or
+  (b) real multi-currency budgeting: give `envelope_transfers` a currency
+  too, and in `get_envelope_balances` convert every row into the base
+  currency through the PLN pivot as of its own date
+  (`amount * get_exchange_rate(h, row.currency, occurred_on)
+  / get_exchange_rate(h, base_currency, occurred_on)`), returning `null`
+  when any row of an envelope has no rate. Define first which date the
+  rate is taken from (transaction date vs. `p_as_of`) and what a
+  transfer between envelopes in different currencies means.
   Document the decision in `docs/project-assumptions-and-plan.md`.
 - **Acceptance:** no dead column, or per-transaction conversion covered by an
   e2e.
@@ -327,8 +337,11 @@ reviewed.
 - **Files:** `envelopes`, `asset_accounts`, `asset_holdings`
 - **Problem:** Duplicate names are allowed, which makes the transaction-form
   suggestions and selects ambiguous.
-- **Proposed change:** unique index on `(household_id, lower(name))` where not
-  archived (or unconditional), with a friendly error in the forms.
+- **Proposed change:** unique index on `(household_id, lower(name))` for
+  `envelopes` and `asset_accounts`, and on `(asset_account_id, lower(name))`
+  for `asset_holdings` (the same instrument may legitimately be held in two
+  accounts), where not archived (or unconditional), with a friendly error in
+  the forms.
 - **Acceptance:** creating a duplicate shows a translated validation error.
 
 
@@ -758,8 +771,9 @@ reviewed.
 - **Files:** `angular.json` budgets, `app.config.ts`
 - **Problem:** Production initial bundle is 576.81 kB vs. a 600 kB warning
   (`main` 523 kB). `@supabase/supabase-js`, Transloco and `@angular/cdk`
-  21.0.0 (pinned, mismatched with Angular 22 - check for duplicate
-  dependencies) are all eager.
+  are all eager. (`@angular/cdk` is pinned to 21.0.0; its peer range
+  `^21 || ^22` is compatible with Angular 22, so aligning it is optional
+  housekeeping unless the stats show a duplicated dependency.)
 - **Proposed change:** `npx ng build --stats-json` + bundle analyzer; lazy
   load the Supabase client until after the auth route resolves if feasible;
   align `@angular/cdk` to `^22`; raise the budget deliberately if justified.
@@ -822,6 +836,10 @@ reviewed.
   bulk funding and processing are implemented (`TODO.md` marks them done).
 - Section 7 says e2e is "Not yet wired into CI", but `ci.yml` has an `e2e`
   job with the Supabase stack.
+- Section 3 describes bulk valuation saving as "a single upsert", but
+  `NetWorthService.recordValuations` does a select, one bulk insert and one
+  update per existing row (not atomic) - see C8; the map should describe
+  the real behaviour until C8 lands.
 - Section 4 "⬜ Automatic rate fetching" is partially done (Frankfurter
   fetch + sync).
 - Global history page, net worth timeline, Polish translation/language
@@ -867,7 +885,7 @@ it belongs to.
 | --- | --- | --- | --- |
 | G1. Audit log (`audit_log` table + owner-only view) | P2 | M | see B10 |
 | G2. Backup/restore + import from export file | P2 | L | depends on D19 format |
-| G3. Disable public self-registration (invite-only) | P2 | S | Supabase `enable_signup=false` in prod + hide Register link; invites already exist |
+| G3. Invite-only registration | P2 | M | Simply setting `enable_signup=false` would break the current invite flow, which lets a brand-new user register before accepting (`/invite/accept` is auth-guarded). Needs either a Supabase Auth "before user created" hook that rejects sign-ups whose e-mail has no pending `household_invites` row, or admin-side provisioning (`auth.admin.inviteUserByEmail` from an edge function) that creates the account with the invite; then hide the public Register link |
 | G4. Leave household / rename / delete household UI | P2 | S | see C7 |
 | G5. Holding price snapshots / commodity prices used in valuation | P1 | M | see B6 |
 | G6. Envelope goals / targets and per-envelope monthly budget amount | P2 | M | GoodBudget parity: "planned X per month", progress bar |
