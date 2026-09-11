@@ -174,7 +174,14 @@ export class NetWorthService {
     return summary;
   }
 
-  /** Loads a net worth summary for each given date, e.g. to render a monthly timeline. */
+  /**
+   * Loads a net worth summary for each given date, e.g. to render a monthly timeline.
+   *
+   * Archived accounts are included: archiving reflects what the user cares about
+   * today, so excluding them here would retroactively erase balances from months
+   * in which those accounts were still live. The caller decides which of them are
+   * worth a row.
+   */
   async loadTimeline(dates: Date[]): Promise<NetWorthSummaryRow[][]> {
     const householdId = this.requireHouseholdId();
 
@@ -183,6 +190,7 @@ export class NetWorthService {
         const { data, error } = await this.supabase.rpc('get_net_worth_summary', {
           p_household_id: householdId,
           p_as_of: toDateOnly(date),
+          p_include_archived: true,
         });
 
         if (error) {

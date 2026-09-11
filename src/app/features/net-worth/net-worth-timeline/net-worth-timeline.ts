@@ -27,6 +27,10 @@ function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
+function endOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
 @Component({
   selector: 'app-net-worth-timeline',
   imports: [
@@ -201,7 +205,25 @@ export class NetWorthTimeline {
   protected readonly windowEnd = signal(startOfMonth(new Date()));
   protected readonly monthlyRows = signal<NetWorthSummaryRow[][]>([]);
 
-  protected readonly accounts = this.netWorth.activeAccounts;
+  /**
+   * Active accounts always get a row. An archived one does too, but only for
+   * windows where it actually held something: archiving says "this is done
+   * with", not "this never happened", so its balances still belong to the
+   * months it was live -- and to those months' totals. Once a window is past
+   * its lifetime every cell is zero and the row drops out on its own.
+   */
+  protected readonly accounts = computed(() => {
+    const maps = this.monthMaps();
+    const heldSomethingInWindow = (accountId: string) =>
+      maps.some((month) => {
+        const row = month.get(accountId);
+        return !!row && row.valuation_id !== null && (row.signed_value_in_base ?? row.signed_value) !== 0;
+      });
+
+    return this.netWorth
+      .accounts()
+      .filter((account) => !account.archived || heldSomethingInWindow(account.id));
+  });
   protected readonly baseCurrency = computed(
     () => this.households.currentHousehold()?.base_currency ?? 'PLN',
   );
@@ -210,6 +232,14 @@ export class NetWorthTimeline {
     const end = this.windowEnd();
     return Array.from({ length: WINDOW_SIZE }, (_, i) => addMonths(end, i - (WINDOW_SIZE - 1)));
   });
+
+  /**
+   * A column headed "Jul 26" means "where things stood at the end of July", so
+   * each column is queried as of the month's last day. Querying the first day
+   * instead would show the previous month's closing balances under this
+   * month's heading, and hide anything recorded during the month itself.
+   */
+  private readonly monthEnds = computed(() => this.months().map(endOfMonth));
 
   private readonly monthMaps = computed(() =>
     this.monthlyRows().map((rows) => new Map(rows.map((row) => [row.account_id, row]))),
@@ -296,7 +326,7 @@ export class NetWorthTimeline {
   }
 
   private async loadTimeline(): Promise<void> {
-    const rows = await this.netWorth.loadTimeline(this.months());
+    const rows = await this.netWorth.loadTimeline(this.monthEnds());
     this.monthlyRows.set(rows);
   }
 
