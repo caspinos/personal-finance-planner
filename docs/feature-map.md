@@ -102,7 +102,10 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   (`owner`/`editor` write, all members read)
 - ✅ `asset_valuations` — manual dated valuation snapshots per account
   (`value`, `contribution_amount` to distinguish contribution vs.
-  market/FX movement, optional note), event-style rows with RLS
+  market/FX movement, optional note), event-style rows with RLS. `value` is
+  recorded from the account's own perspective and may be negative: an
+  overdrawn (debit) asset account, or an overpaid liability that has turned
+  into a receivable
 - ✅ `get_net_worth_summary(household_id, as_of)` SQL function derives each
   account's latest valuation as of a date and signs liabilities negative
   (no stored running totals)
@@ -130,7 +133,8 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   dedicated holding history page listing all buy/sell transactions with
   edit/delete, and forms to record/edit transactions
 - ✅ End-to-end (Playwright) coverage for the net worth flow: account
-  creation, recording/editing/deleting valuations, liability sign handling,
+  creation, recording/editing/deleting valuations, liability sign handling
+  (including an overdrawn account and an overpaid liability),
   account archiving/unarchiving, and holding buy/sell transactions with
   position calculations (`e2e/net-worth.spec.ts`)
 

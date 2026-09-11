@@ -46,6 +46,24 @@ test.describe('Net worth', () => {
     await expectTotalNetWorth(page, '300.00');
   });
 
+  test('records an overdraft as a negative account balance', async ({ page }) => {
+    await createAccount(page, { name: 'Checking account' });
+    await addValuationFromAccountCard(page, { account: 'Checking account', value: '-150' });
+    await page.getByRole('link', { name: 'Back to net worth' }).click();
+
+    await expectAccountValue(page, 'Checking account', '-150.00 PLN');
+    await expectTotalNetWorth(page, '-150.00');
+  });
+
+  test('treats an overpaid liability as a positive contribution to net worth', async ({ page }) => {
+    await createAccount(page, { name: 'Mortgage', type: 'Liability' });
+    await addValuationFromAccountCard(page, { account: 'Mortgage', value: '-50' });
+    await page.getByRole('link', { name: 'Back to net worth' }).click();
+
+    await expectAccountValue(page, 'Mortgage', '50.00 PLN');
+    await expectTotalNetWorth(page, '50.00');
+  });
+
   test('groups accounts by type and filters by liquidity', async ({ page }) => {
     await createAccount(page, { name: 'Checking account' });
     await addValuationFromAccountCard(page, { account: 'Checking account', value: '500' });

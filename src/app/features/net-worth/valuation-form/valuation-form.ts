@@ -89,14 +89,8 @@ function toDateInputValue(date: Date): string {
                   <label hlmFieldLabel for="value">{{
                     'valuationForm.value' | transloco: { currency: currency() }
                   }}</label>
-                  <input
-                    hlmInput
-                    id="value"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    formControlName="value"
-                  />
+                  <input hlmInput id="value" type="number" step="0.01" formControlName="value" />
+                  <p hlmFieldDescription>{{ valueHintKey() | transloco }}</p>
                   @if (form.controls.value.invalid && form.controls.value.touched) {
                     <hlm-field-error forceShow>{{
                       'valuationForm.valueError' | transloco
@@ -163,8 +157,18 @@ export class ValuationForm {
   protected readonly accountId = signal<string | undefined>(
     this.route.snapshot.queryParamMap.get('accountId') ?? undefined,
   );
-  protected readonly currency = computed(
-    () => this.accounts().find((account) => account.id === this.accountId())?.currency ?? '',
+  protected readonly selectedAccount = computed(() =>
+    this.accounts().find((account) => account.id === this.accountId()),
+  );
+  protected readonly currency = computed(() => this.selectedAccount()?.currency ?? '');
+  /**
+   * A valuation may be negative: an asset account can be overdrawn and a liability can be
+   * overpaid, so the hint spells out what a negative value means for the selected account.
+   */
+  protected readonly valueHintKey = computed(() =>
+    this.selectedAccount()?.type === 'liability'
+      ? 'valuationForm.valueHintLiability'
+      : 'valuationForm.valueHintAsset',
   );
   protected readonly loading = signal(true);
   protected readonly submitting = signal(false);
@@ -177,7 +181,7 @@ export class ValuationForm {
     this.accounts().find((account) => account.id === id)?.name ?? '';
 
   protected readonly form = this.fb.nonNullable.group({
-    value: [0, [Validators.required, Validators.min(0)]],
+    value: [0, Validators.required],
     valuedOn: [toDateInputValue(new Date()), Validators.required],
     contributionAmount: [0],
     note: [''],
