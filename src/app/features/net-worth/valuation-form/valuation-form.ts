@@ -1,4 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -89,14 +90,13 @@ function toDateInputValue(date: Date): string {
                   <label hlmFieldLabel for="value">{{
                     'valuationForm.value' | transloco: { currency: currency() }
                   }}</label>
-                  <input
-                    hlmInput
-                    id="value"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    formControlName="value"
-                  />
+                  <input hlmInput id="value" type="number" step="0.01" formControlName="value" />
+                  <p hlmFieldDescription>{{ valueHintKey() | transloco }}</p>
+                  @if (overpaidLiability()) {
+                    <p hlmFieldDescription role="status" class="text-destructive">
+                      {{ 'valuationForm.overpaidLiabilityWarning' | transloco }}
+                    </p>
+                  }
                   @if (form.controls.value.invalid && form.controls.value.touched) {
                     <hlm-field-error forceShow>{{
                       'valuationForm.valueError' | transloco
@@ -163,8 +163,18 @@ export class ValuationForm {
   protected readonly accountId = signal<string | undefined>(
     this.route.snapshot.queryParamMap.get('accountId') ?? undefined,
   );
-  protected readonly currency = computed(
-    () => this.accounts().find((account) => account.id === this.accountId())?.currency ?? '',
+  protected readonly selectedAccount = computed(() =>
+    this.accounts().find((account) => account.id === this.accountId()),
+  );
+  protected readonly currency = computed(() => this.selectedAccount()?.currency ?? '');
+  /**
+   * A valuation is signed the way it contributes to net worth, so the hint spells out which
+   * sign the selected account normally takes.
+   */
+  protected readonly valueHintKey = computed(() =>
+    this.selectedAccount()?.type === 'liability'
+      ? 'valuationForm.valueHintLiability'
+      : 'valuationForm.valueHintAsset',
   );
   protected readonly loading = signal(true);
   protected readonly submitting = signal(false);
@@ -177,11 +187,22 @@ export class ValuationForm {
     this.accounts().find((account) => account.id === id)?.name ?? '';
 
   protected readonly form = this.fb.nonNullable.group({
-    value: [0, [Validators.required, Validators.min(0)]],
+    value: [0, Validators.required],
     valuedOn: [toDateInputValue(new Date()), Validators.required],
     contributionAmount: [0],
     note: [''],
   });
+
+  private readonly enteredValue = toSignal(this.form.controls.value.valueChanges, {
+    initialValue: this.form.controls.value.value,
+  });
+  /**
+   * A debt is recorded as a negative amount, so a positive one means the liability is overpaid.
+   * That happens, so this only warns -- it never blocks saving.
+   */
+  protected readonly overpaidLiability = computed(
+    () => this.selectedAccount()?.type === 'liability' && this.enteredValue() > 0,
+  );
 
   constructor() {
     void this.loadInitialData();

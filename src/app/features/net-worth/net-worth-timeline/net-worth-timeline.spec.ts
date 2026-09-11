@@ -13,9 +13,7 @@ function row(overrides: Partial<NetWorthSummaryRow> = {}): NetWorthSummaryRow {
     valued_on: '2026-05-31',
     last_valued_on: '2026-05-31',
     value: 5000,
-    signed_value: 5000,
     value_in_base: null,
-    signed_value_in_base: null,
     ...overrides,
   };
 }
@@ -39,7 +37,7 @@ describe('timelineCellValue', () => {
 
   it('prefers the base-currency figure when one is available', () => {
     expect(
-      timelineCellValue(row({ signed_value_in_base: 4800 }), new Date(2026, 4, 1), false),
+      timelineCellValue(row({ value_in_base: 4800 }), new Date(2026, 4, 1), false),
     ).toBe(4800);
   });
 

@@ -65,7 +65,7 @@ export function timelineCellValue(
     }
   }
 
-  return row.signed_value_in_base ?? row.signed_value;
+  return row.value_in_base ?? row.value;
 }
 
 @Component({

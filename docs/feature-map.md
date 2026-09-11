@@ -102,10 +102,14 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   (`owner`/`editor` write, all members read)
 - ✅ `asset_valuations` — manual dated valuation snapshots per account
   (`value`, `contribution_amount` to distinguish contribution vs.
-  market/FX movement, optional note), event-style rows with RLS
+  market/FX movement, optional note), event-style rows with RLS. `value` is
+  signed the way it contributes to net worth: a liability is recorded as a
+  negative amount, and the sign also covers an overdrawn (debit) account and
+  an overpaid liability (a positive liability value, which the form warns
+  about but accepts)
 - ✅ `get_net_worth_summary(household_id, as_of)` SQL function derives each
-  account's latest valuation as of a date and signs liabilities negative
-  (no stored running totals)
+  account's latest valuation as of a date (no stored running totals, and no
+  sign flipping — valuations already carry their sign)
 - ✅ `NetWorthService` (Angular): load accounts, load summary, create
   account, record valuation
 - ✅ Net worth UI: total net worth card, per-account cards with latest
@@ -127,7 +131,8 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   account + date uniqueness constraint, so reopening the form for a date
   that was already valued prefills it and corrects the stored rows rather
   than failing (`NetWorthService.recordValuations`/`loadValuationsOn`, no
-  migration needed)
+  migration needed). Like the single-valuation form, the grid takes negative
+  values and warns — without blocking — when a liability row is positive
 - ✅ `asset_transactions` for buy/sell events on investment accounts, via a
   new `asset_holdings` (per-instrument, e.g. a stock/ETF/fund) +
   `asset_transactions` (buy/sell events) schema, additive to whole-account
@@ -142,7 +147,8 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 - ✅ End-to-end (Playwright) coverage for the net worth flow: account
   creation, recording/editing/deleting valuations, bulk valuation entry
   (including prefill/overwrite for an already-valued date and skipping
-  blank rows), liability sign handling, account archiving/unarchiving, and
+  blank rows), liability sign handling (including an overdrawn account and
+  the warning on an overpaid liability), account archiving/unarchiving, and
   holding buy/sell transactions with position calculations
   (`e2e/net-worth.spec.ts`)
 
@@ -165,14 +171,14 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   `CommodityPriceForm`)
 - ✅ Base-currency conversion used across budget and net worth views:
   `get_net_worth_summary` and `get_holding_positions` now also return
-  `value_in_base`/`signed_value_in_base` and `market_value_in_base`/
+  `value_in_base` and `market_value_in_base`/
   `unrealized_gain_in_base`; `get_envelope_balances` returns
   `balance_in_base`. The net worth total/per-account/per-group figures and
   the budget envelope balances display a converted secondary amount (or a
   "no exchange rate" warning instead of a wrong number) when a currency
   differs from the household's base currency. This also fixed a
-  pre-existing bug where `NetWorthService.totalNetWorth` summed
-  `signed_value` across accounts regardless of currency
+  pre-existing bug where `NetWorthService.totalNetWorth` summed each
+  account's own-currency value regardless of currency
 - ⬜ Automatic rate fetching (post-MVP per the plan)
 
 ## 5. Reports & analytics — Stage 4

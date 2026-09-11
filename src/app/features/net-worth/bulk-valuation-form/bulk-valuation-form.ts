@@ -58,7 +58,7 @@ function previousDay(date: Date): Date {
 
 function createRow(): ValuationRowGroup {
   return new FormGroup({
-    value: new FormControl<number | null>(null, [Validators.min(0)]),
+    value: new FormControl<number | null>(null),
     contributionAmount: new FormControl<number | null>(null),
   });
 }
@@ -203,7 +203,6 @@ function createRow(): ValuationRowGroup {
                           <input
                             hlmInput
                             type="number"
-                            min="0"
                             step="0.01"
                             class="w-32 text-right tabular-nums"
                             formControlName="value"
@@ -233,10 +232,10 @@ function createRow(): ValuationRowGroup {
               'bulkValuationForm.noValuesError' | transloco
             }}</hlm-field-error>
           }
-          @if (submitted() && hasInvalidValue()) {
-            <hlm-field-error forceShow>{{
-              'bulkValuationForm.valueError' | transloco
-            }}</hlm-field-error>
+          @if (hasOverpaidLiability()) {
+            <p hlmFieldDescription role="status" class="text-destructive">
+              {{ 'bulkValuationForm.overpaidLiabilityWarning' | transloco }}
+            </p>
           }
 
           <p class="text-muted-foreground text-sm">
@@ -356,8 +355,20 @@ export class BulkValuationForm {
     return this.filledEntries().length;
   }
 
-  protected hasInvalidValue(): boolean {
-    return this.filledEntries().some((entry) => entry.value < 0);
+  /**
+   * A debt is recorded as a negative amount, so a positive one means the liability is overpaid.
+   * That happens, so the grid only warns -- it never blocks saving.
+   */
+  protected hasOverpaidLiability(): boolean {
+    const liabilities = new Set(
+      this.accounts()
+        .filter((account) => account.type === 'liability')
+        .map((account) => account.id),
+    );
+
+    return this.filledEntries().some(
+      (entry) => liabilities.has(entry.accountId) && entry.value > 0,
+    );
   }
 
   protected async submit(): Promise<void> {
@@ -366,13 +377,7 @@ export class BulkValuationForm {
 
     const entries = this.filledEntries();
 
-    if (
-      this.form.invalid ||
-      this.submitting() ||
-      this.prefilling() ||
-      entries.length === 0 ||
-      entries.some((entry) => entry.value < 0)
-    ) {
+    if (this.form.invalid || this.submitting() || this.prefilling() || entries.length === 0) {
       return;
     }
 

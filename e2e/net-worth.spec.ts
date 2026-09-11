@@ -34,17 +34,48 @@ test.describe('Net worth', () => {
     await expectTotalNetWorth(page, '500.00');
   });
 
-  test('treats a liability account as a negative contribution to net worth', async ({ page }) => {
+  test('subtracts a liability, recorded as a negative amount, from net worth', async ({ page }) => {
     await createAccount(page, { name: 'Checking account' });
     await addValuationFromAccountCard(page, { account: 'Checking account', value: '500' });
     await page.getByRole('link', { name: 'Back to net worth' }).click();
 
     await createAccount(page, { name: 'Credit card', type: 'Liability' });
-    await addValuationFromAccountCard(page, { account: 'Credit card', value: '200' });
+    await addValuationFromAccountCard(page, { account: 'Credit card', value: '-200' });
     await page.getByRole('link', { name: 'Back to net worth' }).click();
 
     await expectAccountValue(page, 'Credit card', '-200.00 PLN');
     await expectTotalNetWorth(page, '300.00');
+  });
+
+  test('records an overdraft as a negative account balance', async ({ page }) => {
+    await createAccount(page, { name: 'Checking account' });
+    await addValuationFromAccountCard(page, { account: 'Checking account', value: '-150' });
+    await page.getByRole('link', { name: 'Back to net worth' }).click();
+
+    await expectAccountValue(page, 'Checking account', '-150.00 PLN');
+    await expectTotalNetWorth(page, '-150.00');
+  });
+
+  test('warns about a positive liability value but still saves it as an overpayment', async ({
+    page,
+  }) => {
+    await createAccount(page, { name: 'Mortgage', type: 'Liability' });
+
+    const card = page.locator('[hlmCard]').filter({ hasText: 'Mortgage' });
+    await card.getByRole('link', { name: 'Add valuation' }).click();
+    await expect(page).toHaveURL(/\/net-worth\/valuations\/new\?accountId=.+/);
+
+    await page.getByRole('spinbutton', { name: /^Value/ }).fill('50');
+    await expect(
+      page.getByText('A positive value means this liability is overpaid.')
+    ).toBeVisible();
+
+    await page.getByRole('button', { name: 'Save valuation' }).click();
+    await expect(page).toHaveURL(/\/net-worth\/accounts\/.+/);
+
+    await page.getByRole('link', { name: 'Back to net worth' }).click();
+    await expectAccountValue(page, 'Mortgage', '50.00 PLN');
+    await expectTotalNetWorth(page, '50.00');
   });
 
   test('groups accounts by type and filters by liquidity', async ({ page }) => {
@@ -53,7 +84,7 @@ test.describe('Net worth', () => {
     await page.getByRole('link', { name: 'Back to net worth' }).click();
 
     await createAccount(page, { name: 'Credit card', type: 'Liability' });
-    await addValuationFromAccountCard(page, { account: 'Credit card', value: '200' });
+    await addValuationFromAccountCard(page, { account: 'Credit card', value: '-200' });
     await page.getByRole('link', { name: 'Back to net worth' }).click();
 
     await expect(page.getByRole('heading', { name: 'Bank account', exact: true })).toBeVisible();
@@ -166,7 +197,7 @@ test.describe('Net worth', () => {
 
     await recordBulkValuations(page, [
       { account: 'Checking account', value: '1200', flows: '200' },
-      { account: 'Credit card', value: '300' },
+      { account: 'Credit card', value: '-300' },
     ]);
 
     await expectAccountValue(page, 'Checking account', '1,200.00 PLN');
