@@ -169,14 +169,14 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; labelKey: string }>
                   <div hlmCardContent class="flex flex-col gap-2">
                     <p
                       class="text-2xl font-semibold"
-                      [class.text-destructive]="row.signed_value < 0"
+                      [class.text-destructive]="row.value < 0"
                     >
-                      {{ row.signed_value | number: '1.2-2' }} {{ row.currency }}
+                      {{ row.value | number: '1.2-2' }} {{ row.currency }}
                     </p>
                     @if (row.currency !== baseCurrency()) {
-                      @if (row.signed_value_in_base !== null) {
+                      @if (row.value_in_base !== null) {
                         <p class="text-muted-foreground text-sm">
-                          &approx; {{ row.signed_value_in_base | number: '1.2-2' }}
+                          &approx; {{ row.value_in_base | number: '1.2-2' }}
                           {{ baseCurrency() }}
                         </p>
                       } @else {
@@ -262,7 +262,7 @@ export class NetWorth {
     return Array.from(groups.entries()).map(([type, rows]) => ({
       type,
       rows,
-      subtotal: rows.reduce((total, row) => total + (row.signed_value_in_base ?? row.signed_value), 0),
+      subtotal: rows.reduce((total, row) => total + (row.value_in_base ?? row.value), 0),
     }));
   });
 

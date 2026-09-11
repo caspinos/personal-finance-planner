@@ -247,7 +247,7 @@ export class NetWorthTimeline {
     if (!row || row.valuation_id === null) {
       return null;
     }
-    return row.signed_value_in_base ?? row.signed_value;
+    return row.value_in_base ?? row.value;
   }
 
   protected monthLabel(month: Date): string {

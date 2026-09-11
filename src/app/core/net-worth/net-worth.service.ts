@@ -54,10 +54,9 @@ export interface NetWorthSummaryRow {
   currency: string;
   valuation_id: string | null;
   valued_on: string | null;
+  /** Signed the way it contributes to net worth: negative for debt or an overdrawn account. */
   value: number;
-  signed_value: number;
   value_in_base: number | null;
-  signed_value_in_base: number | null;
 }
 
 export type AssetTransactionType = 'buy' | 'sell';
@@ -126,13 +125,10 @@ export class NetWorthService {
   readonly activeAccounts = computed(() => this.accountsSignal().filter((account) => !account.archived));
   readonly summary = this.summarySignal.asReadonly();
   readonly totalNetWorth = computed(() =>
-    this.summarySignal().reduce(
-      (total, row) => total + (row.signed_value_in_base ?? row.signed_value),
-      0,
-    ),
+    this.summarySignal().reduce((total, row) => total + (row.value_in_base ?? row.value), 0),
   );
   readonly hasUnconvertedRows = computed(() =>
-    this.summarySignal().some((row) => row.signed_value_in_base === null),
+    this.summarySignal().some((row) => row.value_in_base === null),
   );
   readonly holdings = this.holdingsSignal.asReadonly();
   readonly activeHoldings = computed(() =>
@@ -207,10 +203,7 @@ export class NetWorthService {
         valuation_id: row['valuation_id'] as string | null,
         valued_on: row['valued_on'] as string | null,
         value: Number(row['value']),
-        signed_value: Number(row['signed_value']),
         value_in_base: row['value_in_base'] === null ? null : Number(row['value_in_base']),
-        signed_value_in_base:
-          row['signed_value_in_base'] === null ? null : Number(row['signed_value_in_base']),
       });
     }
     return summary;
