@@ -31,6 +31,40 @@ function endOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 }
 
+/** `YYYY-MM`, so a column can be compared against a valuation's own month. */
+function monthKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * What one account shows in one month's column, or null for an empty cell.
+ *
+ * An account that wasn't re-valued in a given month still holds whatever it
+ * held, so `get_net_worth_summary` carries its last figure forward -- right for
+ * a live account, wrong for an archived one. Accounts are rarely zeroed out
+ * before being archived, so without this cut-off a closed account's final
+ * balance would be counted in every month from then on, for good.
+ *
+ * `lastValuedMonth` is `YYYY-MM` of the newest valuation known for the account.
+ */
+export function timelineCellValue(
+  row: NetWorthSummaryRow | undefined,
+  column: Date,
+  account: { archived: boolean; lastValuedMonth: string | undefined },
+): number | null {
+  if (!row || row.valuation_id === null) {
+    return null;
+  }
+
+  if (account.archived) {
+    if (account.lastValuedMonth === undefined || monthKey(column) > account.lastValuedMonth) {
+      return null;
+    }
+  }
+
+  return row.signed_value_in_base ?? row.signed_value;
+}
+
 @Component({
   selector: 'app-net-worth-timeline',
   imports: [
@@ -209,16 +243,15 @@ export class NetWorthTimeline {
    * Active accounts always get a row. An archived one does too, but only for
    * windows where it actually held something: archiving says "this is done
    * with", not "this never happened", so its balances still belong to the
-   * months it was live -- and to those months' totals. Once a window is past
-   * its lifetime every cell is zero and the row drops out on its own.
+   * months it was live -- and to those months' totals. Past its lifetime
+   * `cellValue` blanks every cell, so the row drops out of later windows.
    */
   protected readonly accounts = computed(() => {
-    const maps = this.monthMaps();
+    const monthCount = this.months().length;
     const heldSomethingInWindow = (accountId: string) =>
-      maps.some((month) => {
-        const row = month.get(accountId);
-        return !!row && row.valuation_id !== null && (row.signed_value_in_base ?? row.signed_value) !== 0;
-      });
+      Array.from({ length: monthCount }, (_, index) => this.cellValue(accountId, index)).some(
+        (value) => value !== null && value !== 0,
+      );
 
     return this.netWorth
       .accounts()
@@ -244,6 +277,35 @@ export class NetWorthTimeline {
   private readonly monthMaps = computed(() =>
     this.monthlyRows().map((rows) => new Map(rows.map((row) => [row.account_id, row]))),
   );
+
+  private readonly archivedAccountIds = computed(
+    () =>
+      new Set(
+        this.netWorth
+          .accounts()
+          .filter((account) => account.archived)
+          .map((account) => account.id),
+      ),
+  );
+
+  /**
+   * The last month each account was actually valued in, as far as this window
+   * can see. The summary carries the newest valuation at or before a column
+   * forward, so the latest column's row already names that valuation's date.
+   */
+  private readonly lastValuedMonth = computed(() => {
+    const lastValued = new Map<string, string>();
+
+    for (const month of this.monthMaps()) {
+      for (const [accountId, row] of month) {
+        if (row.valued_on !== null) {
+          lastValued.set(accountId, row.valued_on.slice(0, 7));
+        }
+      }
+    }
+
+    return lastValued;
+  });
 
   protected readonly groupedAccounts = computed(() => {
     const groups = new Map<AssetAccountType, AssetAccount[]>();
@@ -273,11 +335,10 @@ export class NetWorthTimeline {
   }
 
   protected cellValue(accountId: string, monthIndex: number): number | null {
-    const row = this.monthMaps()[monthIndex]?.get(accountId);
-    if (!row || row.valuation_id === null) {
-      return null;
-    }
-    return row.signed_value_in_base ?? row.signed_value;
+    return timelineCellValue(this.monthMaps()[monthIndex]?.get(accountId), this.months()[monthIndex], {
+      archived: this.archivedAccountIds().has(accountId),
+      lastValuedMonth: this.lastValuedMonth().get(accountId),
+    });
   }
 
   protected monthLabel(month: Date): string {
