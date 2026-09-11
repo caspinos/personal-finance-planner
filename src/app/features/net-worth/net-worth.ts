@@ -2,6 +2,8 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideHistory, lucidePlus } from '@ng-icons/lucide';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
@@ -31,6 +33,7 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; labelKey: string }>
   imports: [
     DatePipe,
     DecimalPipe,
+    NgIcon,
     RouterLink,
     HlmAlertImports,
     HlmButtonImports,
@@ -40,17 +43,18 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; labelKey: string }>
     HlmSpinnerImports,
     TranslocoModule,
   ],
+  providers: [provideIcons({ lucideHistory, lucidePlus })],
   template: `
-    <div class="flex flex-col gap-6">
-      <div class="flex flex-wrap items-start justify-between gap-4">
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 class="text-2xl font-semibold">{{ 'netWorth.title' | transloco }}</h1>
-          <p class="text-muted-foreground text-sm">
+          <h1 class="text-xl font-semibold sm:text-2xl">{{ 'netWorth.title' | transloco }}</h1>
+          <p class="text-muted-foreground text-xs sm:text-sm">
             {{ 'netWorth.subtitle' | transloco: { date: asOfLabel() } }}
           </p>
         </div>
 
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-1.5">
           <a hlmBtn variant="ghost" size="sm" routerLink="/net-worth/timeline">
             {{ 'netWorth.viewTimeline' | transloco }}
           </a>
@@ -73,23 +77,25 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; labelKey: string }>
         </div>
       }
 
-      <div hlmCard>
+      <div hlmCard size="sm">
         <div hlmCardHeader>
           <h2 hlmCardTitle>{{ 'netWorth.totalNetWorth' | transloco }}</h2>
-          <p hlmCardDescription>{{ 'netWorth.totalNetWorthDescription' | transloco }}</p>
         </div>
         <div hlmCardContent>
           @if (loading()) {
-            <div class="flex items-center gap-2 text-sm text-muted-foreground">
+            <div class="text-muted-foreground flex items-center gap-2 text-sm">
               <hlm-spinner />
               {{ 'netWorth.loading' | transloco }}
             </div>
           } @else {
             <p
-              class="text-3xl font-semibold"
+              class="text-2xl font-semibold tabular-nums"
               [class.text-destructive]="netWorth.totalNetWorth() < 0"
             >
               {{ netWorth.totalNetWorth() | number: '1.2-2' }} {{ baseCurrency() }}
+            </p>
+            <p class="text-muted-foreground text-xs">
+              {{ 'netWorth.totalNetWorthDescription' | transloco }}
             </p>
             @if (netWorth.hasUnconvertedRows()) {
               <p class="text-muted-foreground mt-1 text-xs">
@@ -102,7 +108,7 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; labelKey: string }>
       </div>
 
       @if (!loading() && rows().length === 0) {
-        <div hlmCard class="max-w-md">
+        <div hlmCard size="sm" class="max-w-md">
           <div hlmCardHeader>
             <h2 hlmCardTitle>{{ 'netWorth.noAccountsTitle' | transloco }}</h2>
             <p hlmCardDescription>{{ 'netWorth.noAccountsDescription' | transloco }}</p>
@@ -115,14 +121,14 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; labelKey: string }>
         </div>
       } @else if (!loading()) {
         <div class="flex flex-wrap items-end gap-2">
-          <div hlmField class="w-48">
+          <div hlmField class="w-full sm:w-56">
             <label hlmFieldLabel>{{ 'netWorth.filterByLiquidity' | transloco }}</label>
             <hlm-select
               [value]="liquidityFilter()"
               (valueChange)="onLiquidityFilterChange($event)"
               [itemToString]="liquidityToString"
             >
-              <hlm-select-trigger class="w-48">
+              <hlm-select-trigger class="w-full sm:w-56">
                 <hlm-select-value [placeholder]="'netWorth.allLiquidityClasses' | transloco" />
               </hlm-select-trigger>
               <hlm-select-content *hlmSelectPortal>
@@ -142,47 +148,66 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; labelKey: string }>
         </div>
 
         @if (groupedRows().length === 0) {
-          <p class="text-muted-foreground text-sm">{{ 'netWorth.noAccountsMatchFilter' | transloco }}</p>
+          <p class="text-muted-foreground text-sm">
+            {{ 'netWorth.noAccountsMatchFilter' | transloco }}
+          </p>
         }
 
         @for (group of groupedRows(); track group.type) {
-          <div class="flex flex-col gap-3">
+          <section class="flex flex-col gap-1.5">
             <div class="flex items-baseline justify-between gap-2">
-              <h2 class="text-lg font-semibold">{{ accountTypeLabel(group.type) }}</h2>
+              <h2 class="text-sm font-semibold">{{ accountTypeLabel(group.type) }}</h2>
               <span
-                class="font-medium"
+                class="text-sm font-medium tabular-nums"
                 [class.text-destructive]="group.subtotal < 0"
               >
                 {{ group.subtotal | number: '1.2-2' }} {{ baseCurrency() }}
               </span>
             </div>
 
-            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <ul class="grid gap-1.5 md:grid-cols-2 xl:grid-cols-3">
               @for (row of group.rows; track row.account_id) {
-                <div hlmCard>
-                  <div hlmCardHeader>
-                    <h3 hlmCardTitle>{{ row.account_name }}</h3>
-                    <p hlmCardDescription>
-                      {{ liquidityLabel(row.liquidity) }}
-                      @if (row.category) {
-                        &middot; {{ row.category }}
-                      }
-                    </p>
-                  </div>
-                  <div hlmCardContent class="flex flex-col gap-2">
-                    <p
-                      class="text-2xl font-semibold"
-                      [class.text-destructive]="row.value < 0"
-                    >
-                      {{ row.value | number: '1.2-2' }} {{ row.currency }}
-                    </p>
-                    @if (row.currency !== baseCurrency()) {
-                      @if (row.value_in_base !== null) {
-                        <p class="text-muted-foreground text-sm">
-                          &approx; {{ row.value_in_base | number: '1.2-2' }}
-                          {{ baseCurrency() }}
-                        </p>
-                      } @else {
+                <li hlmCard size="sm">
+                  <div class="flex items-center gap-2 px-3">
+                    <div class="flex min-w-0 flex-1 flex-col">
+                      <div class="flex items-baseline justify-between gap-2">
+                        <h3 class="truncate text-sm font-medium" [title]="row.account_name">
+                          {{ row.account_name }}
+                        </h3>
+                        <span
+                          class="shrink-0 text-sm font-semibold tabular-nums"
+                          [class.text-destructive]="row.value < 0"
+                        >
+                          {{ row.value | number: '1.2-2' }} {{ row.currency }}
+                        </span>
+                      </div>
+
+                      <div
+                        class="text-muted-foreground flex items-baseline justify-between gap-2 text-xs"
+                      >
+                        <span class="truncate">
+                          {{ liquidityLabel(row.liquidity) }}
+                          @if (row.category) {
+                            &middot; {{ row.category }}
+                          }
+                          &middot;
+                          @if (row.valued_on) {
+                            {{
+                              'netWorth.valued'
+                                | transloco: { date: (row.valued_on | date: 'mediumDate') }
+                            }}
+                          } @else {
+                            {{ 'netWorth.noValuationYet' | transloco }}
+                          }
+                        </span>
+                        @if (row.currency !== baseCurrency() && row.value_in_base !== null) {
+                          <span class="shrink-0 tabular-nums">
+                            &approx; {{ row.value_in_base | number: '1.2-2' }} {{ baseCurrency() }}
+                          </span>
+                        }
+                      </div>
+
+                      @if (row.currency !== baseCurrency() && row.value_in_base === null) {
                         <p class="text-muted-foreground text-xs">
                           {{ 'netWorth.noExchangeRate' | transloco }}
                           <a routerLink="/rates" class="underline">{{
@@ -190,38 +215,36 @@ const LIQUIDITY_CLASSES: Array<{ value: AssetLiquidityClass; labelKey: string }>
                           }}</a>
                         </p>
                       }
-                    }
-                    <p class="text-muted-foreground text-sm">
-                      @if (row.valued_on) {
-                        {{ 'netWorth.valued' | transloco: { date: (row.valued_on | date: 'mediumDate') } }}
-                      } @else {
-                        {{ 'netWorth.noValuationYet' | transloco }}
-                      }
-                    </p>
+                    </div>
+
+                    <div class="flex shrink-0 items-center gap-0.5">
+                      <a
+                        hlmBtn
+                        variant="ghost"
+                        size="icon-sm"
+                        [routerLink]="['/net-worth/accounts', row.account_id]"
+                        [attr.aria-label]="'netWorth.viewHistory' | transloco"
+                        [title]="'netWorth.viewHistory' | transloco"
+                      >
+                        <ng-icon name="lucideHistory" />
+                      </a>
+                      <a
+                        hlmBtn
+                        variant="ghost"
+                        size="icon-sm"
+                        routerLink="/net-worth/valuations/new"
+                        [queryParams]="{ accountId: row.account_id }"
+                        [attr.aria-label]="'netWorth.addValuation' | transloco"
+                        [title]="'netWorth.addValuation' | transloco"
+                      >
+                        <ng-icon name="lucidePlus" />
+                      </a>
+                    </div>
                   </div>
-                  <div hlmCardFooter class="flex flex-wrap gap-2">
-                    <a
-                      hlmBtn
-                      variant="outline"
-                      size="sm"
-                      [routerLink]="['/net-worth/accounts', row.account_id]"
-                    >
-                      {{ 'netWorth.viewHistory' | transloco }}
-                    </a>
-                    <a
-                      hlmBtn
-                      variant="outline"
-                      size="sm"
-                      routerLink="/net-worth/valuations/new"
-                      [queryParams]="{ accountId: row.account_id }"
-                    >
-                      {{ 'netWorth.addValuation' | transloco }}
-                    </a>
-                  </div>
-                </div>
+                </li>
               }
-            </div>
-          </div>
+            </ul>
+          </section>
         }
       }
     </div>

@@ -2,6 +2,16 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import {
+  lucideChevronLeft,
+  lucideChevronRight,
+  lucideHistory,
+  lucidePause,
+  lucidePencil,
+  lucidePlay,
+  lucideTrash2,
+} from '@ng-icons/lucide';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
@@ -22,6 +32,7 @@ function endOfMonth(date: Date): Date {
 @Component({
   selector: 'app-budget',
   imports: [
+    NgIcon,
     RouterLink,
     DecimalPipe,
     HlmButtonImports,
@@ -29,10 +40,21 @@ function endOfMonth(date: Date): Date {
     HlmSpinnerImports,
     TranslocoModule,
   ],
+  providers: [
+    provideIcons({
+      lucideChevronLeft,
+      lucideChevronRight,
+      lucideHistory,
+      lucidePause,
+      lucidePencil,
+      lucidePlay,
+      lucideTrash2,
+    }),
+  ],
   template: `
-    <div class="flex flex-col gap-6">
-      <div class="flex flex-wrap items-center justify-between gap-4">
-        <div class="flex items-center gap-2">
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-1">
           <button
             hlmBtn
             variant="outline"
@@ -41,9 +63,9 @@ function endOfMonth(date: Date): Date {
             (click)="previousMonth()"
             aria-label="Previous month"
           >
-            &lsaquo;
+            <ng-icon name="lucideChevronLeft" />
           </button>
-          <span class="min-w-40 text-center font-medium">{{ monthLabel() }}</span>
+          <span class="min-w-32 text-center text-sm font-medium">{{ monthLabel() }}</span>
           <button
             hlmBtn
             variant="outline"
@@ -52,11 +74,11 @@ function endOfMonth(date: Date): Date {
             (click)="nextMonth()"
             aria-label="Next month"
           >
-            &rsaquo;
+            <ng-icon name="lucideChevronRight" />
           </button>
         </div>
 
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-1.5">
           <a hlmBtn variant="ghost" size="sm" routerLink="/budget/history">{{
             'budget.history' | transloco
           }}</a>
@@ -81,67 +103,71 @@ function endOfMonth(date: Date): Date {
       @if (loading()) {
         <p class="text-muted-foreground text-sm">{{ 'budget.loadingEnvelopes' | transloco }}</p>
       } @else if (envelopes().length === 0) {
-        <div hlmCard class="max-w-md">
+        <div hlmCard size="sm" class="max-w-md">
           <div hlmCardHeader>
             <h2 hlmCardTitle>{{ 'budget.noEnvelopesTitle' | transloco }}</h2>
             <p hlmCardDescription>{{ 'budget.noEnvelopesDescription' | transloco }}</p>
           </div>
         </div>
       } @else {
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul class="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
           @for (envelope of envelopes(); track envelope.id) {
-            <div hlmCard>
-              <div hlmCardHeader>
-                <h2 hlmCardTitle>{{ envelope.name }}</h2>
-                <p hlmCardDescription>{{
-                  'budget.balanceAsOf' | transloco: { month: monthLabel() }
-                }}</p>
-              </div>
-              <div hlmCardContent class="flex flex-col gap-1">
-                <p
-                  class="text-2xl font-semibold"
-                  [class.text-destructive]="(balances()[envelope.id]?.balance ?? 0) < 0"
-                >
-                  {{ balances()[envelope.id]?.balance ?? 0 | number: '1.2-2' }} PLN
-                </p>
-                @if (baseCurrency() !== 'PLN') {
-                  @if (balances()[envelope.id]?.balance_in_base != null) {
-                    <p class="text-muted-foreground text-sm">
-                      &approx;
-                      {{ balances()[envelope.id]?.balance_in_base | number: '1.2-2' }}
-                      {{ baseCurrency() }}
-                    </p>
-                  } @else {
-                    <p class="text-muted-foreground text-xs">
-                      {{ 'budget.noRateSet' | transloco: { currency: baseCurrency() } }}
+            <li hlmCard size="sm">
+              <div class="flex items-center gap-2 px-3">
+                <div class="flex min-w-0 flex-1 flex-col">
+                  <div class="flex items-baseline justify-between gap-2">
+                    <h2 class="truncate text-sm font-medium" [title]="envelope.name">
+                      {{ envelope.name }}
+                    </h2>
+                    <span
+                      class="shrink-0 text-sm font-semibold tabular-nums"
+                      [class.text-destructive]="(balances()[envelope.id]?.balance ?? 0) < 0"
+                    >
+                      {{ balances()[envelope.id]?.balance ?? 0 | number: '1.2-2' }} PLN
+                    </span>
+                  </div>
+
+                  @if (baseCurrency() !== 'PLN') {
+                    <p class="text-muted-foreground text-right text-xs tabular-nums">
+                      @if (balances()[envelope.id]?.balance_in_base != null) {
+                        &approx; {{ balances()[envelope.id]?.balance_in_base | number: '1.2-2' }}
+                        {{ baseCurrency() }}
+                      } @else {
+                        {{ 'budget.noRateSet' | transloco: { currency: baseCurrency() } }}
+                      }
                     </p>
                   }
-                }
+                </div>
+
+                <div class="flex shrink-0 items-center gap-0.5">
+                  <a
+                    hlmBtn
+                    variant="ghost"
+                    size="icon-sm"
+                    [routerLink]="['/budget/envelopes', envelope.id]"
+                    [attr.aria-label]="'budget.viewHistory' | transloco"
+                    [title]="'budget.viewHistory' | transloco"
+                  >
+                    <ng-icon name="lucideHistory" />
+                  </a>
+                  <a
+                    hlmBtn
+                    variant="ghost"
+                    size="icon-sm"
+                    [routerLink]="['/budget/envelopes', envelope.id, 'edit']"
+                    [attr.aria-label]="'budget.rename' | transloco"
+                    [title]="'budget.rename' | transloco"
+                  >
+                    <ng-icon name="lucidePencil" />
+                  </a>
+                </div>
               </div>
-              <div hlmCardFooter class="flex flex-wrap gap-2">
-                <a
-                  hlmBtn
-                  variant="outline"
-                  size="sm"
-                  [routerLink]="['/budget/envelopes', envelope.id]"
-                >
-                  {{ 'budget.viewHistory' | transloco }}
-                </a>
-                <a
-                  hlmBtn
-                  variant="ghost"
-                  size="sm"
-                  [routerLink]="['/budget/envelopes', envelope.id, 'edit']"
-                >
-                  {{ 'budget.rename' | transloco }}
-                </a>
-              </div>
-            </div>
+            </li>
           }
-        </div>
+        </ul>
       }
 
-      <div hlmCard>
+      <div hlmCard size="sm">
         <div hlmCardHeader>
           <h2 hlmCardTitle>{{ 'budget.recurringRulesTitle' | transloco }}</h2>
           <p hlmCardDescription>
@@ -154,61 +180,71 @@ function endOfMonth(date: Date): Date {
               {{ 'budget.noRecurringRules' | transloco }}
             </p>
           } @else {
-            <ul class="flex flex-col gap-3">
+            <ul class="border-border divide-border divide-y rounded-md border">
               @for (rule of recurringRules(); track rule.id) {
-                <li
-                  class="border-border flex flex-col gap-3 rounded-md border p-4 md:flex-row md:items-center md:justify-between"
-                >
-                  <div class="flex min-w-0 flex-col gap-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <span class="font-medium">{{ rule.name }}</span>
-                      <span class="text-muted-foreground text-sm">
-                        {{ (rule.type === 'income' ? 'budget.topUp' : 'budget.charge') | transloco }}
-                        &middot;
-                        {{ envelopeName(rule.envelope_id) }} &middot;
-                        {{ 'budget.dayOfMonth' | transloco: { day: rule.day_of_month } }}
+                <li class="flex items-center gap-2 px-3 py-2">
+                  <div class="flex min-w-0 flex-1 flex-col">
+                    <div class="flex items-baseline justify-between gap-2">
+                      <span class="truncate text-sm font-medium">{{ rule.name }}</span>
+                      <span class="shrink-0 text-sm font-medium tabular-nums">
+                        {{ rule.amount | number: '1.2-2' }} PLN
                       </span>
                     </div>
-                    <p class="text-muted-foreground text-sm">
-                      {{ 'budget.nextRun' | transloco: { date: rule.next_run_on } }}
+                    <p class="text-muted-foreground truncate text-xs">
+                      {{ (rule.type === 'income' ? 'budget.topUp' : 'budget.charge') | transloco }}
+                      &middot; {{ envelopeName(rule.envelope_id) }} &middot;
+                      {{ 'budget.dayOfMonth' | transloco: { day: rule.day_of_month } }}
+                      &middot; {{ 'budget.nextRun' | transloco: { date: rule.next_run_on } }}
                       @if (!rule.active) {
                         &middot; {{ 'budget.paused' | transloco }}
                       }
                     </p>
                   </div>
 
-                  <div class="flex shrink-0 flex-wrap items-center gap-2">
-                    <span class="min-w-28 text-right font-medium">
-                      {{ rule.amount | number: '1.2-2' }} PLN
-                    </span>
-                    <a hlmBtn variant="outline" size="sm" [routerLink]="['/budget/recurring', rule.id, 'edit']">
-                      {{ 'common.edit' | transloco }}
+                  <div class="flex shrink-0 items-center gap-0.5">
+                    <a
+                      hlmBtn
+                      variant="ghost"
+                      size="icon-sm"
+                      [routerLink]="['/budget/recurring', rule.id, 'edit']"
+                      [attr.aria-label]="'common.edit' | transloco"
+                      [title]="'common.edit' | transloco"
+                    >
+                      <ng-icon name="lucidePencil" />
                     </a>
                     <button
                       hlmBtn
-                      variant="outline"
-                      size="sm"
+                      variant="ghost"
+                      size="icon-sm"
                       type="button"
                       [disabled]="togglingId() === rule.id"
                       (click)="toggleActive(rule)"
+                      [attr.aria-label]="
+                        (rule.active ? 'budget.pause' : 'budget.resume') | transloco
+                      "
+                      [title]="(rule.active ? 'budget.pause' : 'budget.resume') | transloco"
                     >
                       @if (togglingId() === rule.id) {
                         <hlm-spinner />
+                      } @else {
+                        <ng-icon [name]="rule.active ? 'lucidePause' : 'lucidePlay'" />
                       }
-                      {{ (rule.active ? 'budget.pause' : 'budget.resume') | transloco }}
                     </button>
                     <button
                       hlmBtn
                       variant="destructive"
-                      size="sm"
+                      size="icon-sm"
                       type="button"
                       [disabled]="deletingId() === rule.id"
                       (click)="deleteRule(rule)"
+                      [attr.aria-label]="'common.delete' | transloco"
+                      [title]="'common.delete' | transloco"
                     >
                       @if (deletingId() === rule.id) {
                         <hlm-spinner />
+                      } @else {
+                        <ng-icon name="lucideTrash2" />
                       }
-                      {{ 'common.delete' | transloco }}
                     </button>
                   </div>
                 </li>
