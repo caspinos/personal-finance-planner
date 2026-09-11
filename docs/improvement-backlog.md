@@ -223,7 +223,7 @@ reviewed.
 ### B5. Valuation currency can differ from the account currency (P2, S) 🔍
 - **Files:** `asset_valuations.currency`, `get_net_worth_summary`
   (`coalesce(latest.currency, aa.currency)`)
-- **Problem:** Two sources of truth. The UI (verify) copies the account
+- **Problem:** Two sources of truth. The UI currently copies the account
   currency into the valuation, but nothing prevents drift, and changing an
   account's currency does not touch historical valuations (which may be
   intended - document it either way).
@@ -253,8 +253,12 @@ reviewed.
 - **Problem:** Nothing prevents selling more than owned as of the sell date,
   producing negative quantities and nonsensical gains.
 - **Proposed change:** validate in the form against the position as of the
-  transaction date (use `get_holding_positions(as_of = date)`), and add a
-  DB-level trigger for defence in depth (or document as accepted).
+  transaction date, excluding the transaction being edited (in edit mode
+  `get_holding_positions(as_of = date)` already includes the existing sell,
+  so compare against `quantity + old_sell_quantity`, or compute the position
+  client-side from the holding's transactions minus the edited row), and add
+  a DB-level trigger that performs the same check atomically for defence in
+  depth (or document as accepted).
 - **Acceptance:** form error "cannot sell more than X units held on that date".
 
 ### B8. Realized gains are not derived (P2, M) 🔍
@@ -330,9 +334,13 @@ reviewed.
 - **Problem:** The column exists (default `PLN`) but the sum mixes all
   currencies and the base conversion assumes PLN ("product decision: budget is
   PLN-only"). Either the column is dead, or the function is wrong.
-- **Proposed change:** decide: (a) drop the column and any UI for it (the
-  simplest option and consistent with the current "PLN-only" decision), or
-  (b) real multi-currency budgeting: give `envelope_transfers` a currency
+- **Proposed change:** reconcile with the plan first:
+  `docs/project-assumptions-and-plan.md` (section 2.5) requires "multiple
+  transaction currencies", so option (a) is only acceptable if the product
+  owner explicitly narrows that requirement to net worth. Options: (a) drop
+  the column and any UI for it and record the narrowed requirement in the
+  plan (the simplest option and consistent with the current "PLN-only"
+  decision), or (b) real multi-currency budgeting: give `envelope_transfers` a currency
   too, and in `get_envelope_balances` convert every row into the base
   currency through the PLN pivot as of its own date
   (`amount * get_exchange_rate(h, row.currency, occurred_on)
@@ -369,8 +377,11 @@ reviewed.
   accumulate forever; an owner cannot hard-delete a mistaken invite. Tokens are
   UUIDv4 (fine) but the accept link carries the token in the URL, which ends up
   in browser history and server logs - acceptable for now, note it.
-- **Proposed change:** owner delete policy + a periodic cleanup (pg_cron)
-  of rows expired > 30 days; optionally hash the token at rest.
+- **Proposed change:** `grant delete on public.household_invites to
+  authenticated` (the table currently has only `select, insert, update`
+  grants, so PostgREST rejects DELETE before RLS runs) plus an owner-only
+  delete policy; a periodic cleanup (pg_cron) of rows expired > 30 days;
+  optionally hash the token at rest.
 - **Acceptance:** owners can delete; cleanup job documented.
 
 ### B15. Envelopes have no uniqueness on `(household_id, name)` (P2, S) 🔍
@@ -411,7 +422,11 @@ reviewed.
   household_id)` (same for accounts/holdings); alternatively a `before
   insert or update` trigger raising when parent and child households
   differ. Add `and household_id = <parent's>` filters to the derived-state
-  functions as defence in depth.
+  functions as defence in depth. Because the current write path already
+  accepts mismatched rows, the migration must preflight existing data:
+  select every child row whose parent has a different `household_id`, and
+  either abort with the list (preferred - a human decides) or move/delete
+  them by an explicit documented policy before adding the constraints.
 - **Acceptance:** pgTAP/SQL test: inserting a transaction whose envelope
   belongs to another household fails; e2e regression with two households.
 
@@ -963,8 +978,9 @@ reviewed.
 - Domain rules are scattered across `docs/feature-map.md` entries, migration
   headers and code comments: valuation sign convention, budget is PLN-only,
   PLN as rate pivot, average-cost (not FIFO) holdings, amortization
-  invariants, recurring-rule day clamp (1-28), contribution sign (B13, not
-  documented anywhere yet). Collect them in `docs/domain-rules.md` so agents
+  invariants, recurring-rule day clamp (1-28), contribution sign (B13:
+  today only a form label, not a schema-level rule). Collect them in
+  `docs/domain-rules.md` so agents
   do not re-derive or contradict them, and link it from AGENTS.md.
 - **Acceptance:** each rule above has one canonical paragraph in
   `docs/domain-rules.md`; feature-map entries link to it instead of
@@ -991,7 +1007,8 @@ it belongs to.
 
 ## Suggested execution order for agents
 
-1. **P0 bugs, independent, small:** D1, D2.
+1. **P0 bugs first:** B16 (cross-household writes, needs the data
+   preflight), D1, D2 - the last two are independent and small.
 2. **Correctness / data integrity, small:** C4 (+ timeline), C6, C2, C9, B9,
    D13, B12 (decision), B4.
 3. **Foundations that unblock many items:** C1 (typed client), C3 + D5 + D4 +
