@@ -53,7 +53,10 @@ export interface NetWorthSummaryRow {
   category: string | null;
   currency: string;
   valuation_id: string | null;
+  /** Date of the valuation this row reports, i.e. the newest one at or before the as-of date. */
   valued_on: string | null;
+  /** Date of the account's newest valuation overall, regardless of the as-of date. */
+  last_valued_on: string | null;
   value: number;
   signed_value: number;
   value_in_base: number | null;
@@ -174,7 +177,14 @@ export class NetWorthService {
     return summary;
   }
 
-  /** Loads a net worth summary for each given date, e.g. to render a monthly timeline. */
+  /**
+   * Loads a net worth summary for each given date, e.g. to render a monthly timeline.
+   *
+   * Archived accounts are included: archiving reflects what the user cares about
+   * today, so excluding them here would retroactively erase balances from months
+   * in which those accounts were still live. The caller decides which of them are
+   * worth a row.
+   */
   async loadTimeline(dates: Date[]): Promise<NetWorthSummaryRow[][]> {
     const householdId = this.requireHouseholdId();
 
@@ -183,6 +193,7 @@ export class NetWorthService {
         const { data, error } = await this.supabase.rpc('get_net_worth_summary', {
           p_household_id: householdId,
           p_as_of: toDateOnly(date),
+          p_include_archived: true,
         });
 
         if (error) {
@@ -206,6 +217,7 @@ export class NetWorthService {
         currency: row['currency'] as string,
         valuation_id: row['valuation_id'] as string | null,
         valued_on: row['valued_on'] as string | null,
+        last_valued_on: row['last_valued_on'] as string | null,
         value: Number(row['value']),
         signed_value: Number(row['signed_value']),
         value_in_base: row['value_in_base'] === null ? null : Number(row['value_in_base']),
