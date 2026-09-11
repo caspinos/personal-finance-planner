@@ -649,13 +649,23 @@ export class NetWorthTimeline {
     void this.reloadTimeline();
   }
 
+  /**
+   * Moving the window changes the month headings synchronously, so the rows
+   * have to go with them: showing the old window's figures under the new
+   * month's heading would misreport every balance on screen, and leaving them
+   * up next to a load error would leave a wrong number as the last word.
+   */
   private async reloadTimeline(): Promise<void> {
     this.errorMessage.set(null);
+    this.loading.set(true);
 
     try {
       await this.loadTimeline();
     } catch (error) {
+      this.monthlyRows.set([]);
       this.errorMessage.set(this.extractMessage(error));
+    } finally {
+      this.loading.set(false);
     }
   }
 

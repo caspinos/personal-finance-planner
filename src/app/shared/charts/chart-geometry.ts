@@ -91,6 +91,38 @@ export function niceScale(
   return { min, max, ticks };
 }
 
+/**
+ * Groups indices into runs of consecutive entries that actually have a value,
+ * e.g. `[100, null, 200, 300]` -> `[[0], [2, 3]]`.
+ *
+ * Every mark that spans more than one observation -- a line segment, a band of
+ * area fill -- has to be built per run. Drawing one across the whole series
+ * instead would bridge the months with no figure and imply a value that was
+ * never recorded.
+ */
+export function definedRuns(values: Array<number | null>): number[][] {
+  const runs: number[][] = [];
+  let current: number[] = [];
+
+  values.forEach((value, index) => {
+    if (value === null) {
+      if (current.length > 0) {
+        runs.push(current);
+        current = [];
+      }
+      return;
+    }
+
+    current.push(index);
+  });
+
+  if (current.length > 0) {
+    runs.push(current);
+  }
+
+  return runs;
+}
+
 /** Maps a value in `scale` onto a y coordinate inside a plot box. */
 export function scaleY(value: number, scale: ChartScale, top: number, height: number): number {
   const span = scale.max - scale.min;

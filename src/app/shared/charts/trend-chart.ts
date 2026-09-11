@@ -1,6 +1,13 @@
 import { Component, LOCALE_ID, computed, inject, input, signal } from '@angular/core';
 
-import { ChartPoint, bandCenter, labelStride, niceScale, scaleY } from './chart-geometry';
+import {
+  ChartPoint,
+  bandCenter,
+  definedRuns,
+  labelStride,
+  niceScale,
+  scaleY,
+} from './chart-geometry';
 import { hostWidth } from './host-width';
 
 const TOP = 14;
@@ -50,8 +57,8 @@ const MAX_AXIS_LABEL = 64;
         </text>
       }
 
-      @if (areaPath()) {
-        <path [attr.d]="areaPath()" fill="var(--primary)" fill-opacity="0.1" />
+      @for (band of areaPaths(); track $index) {
+        <path [attr.d]="band" fill="var(--primary)" fill-opacity="0.1" />
       }
       @for (segment of linePaths(); track $index) {
         <path
@@ -61,6 +68,17 @@ const MAX_AXIS_LABEL = 64;
           stroke-width="2"
           stroke-linecap="round"
           stroke-linejoin="round"
+        />
+      }
+
+      @for (point of isolatedPoints(); track point.index) {
+        <circle
+          [attr.cx]="point.x"
+          [attr.cy]="point.y"
+          r="4"
+          fill="var(--primary)"
+          stroke="var(--card)"
+          stroke-width="2"
         />
       }
 
@@ -144,7 +162,7 @@ export class TrendChart {
   readonly height = input(200);
   /** Appended to each formatted figure in the tooltip, e.g. the base currency. */
   readonly unit = input('');
-  /** Describes the whole chart for screen readers; the data table carries the detail. */
+  /** Describes the whole chart for screen readers; the figures below it carry the detail. */
   readonly ariaLabel = input('');
 
   protected readonly TOP = TOP;
@@ -211,52 +229,68 @@ export class TrendChart {
     }));
   });
 
+  private readonly runs = computed(() => definedRuns(this.points().map((point) => point.value)));
+
   /** One path per run of consecutive months that actually have a figure. */
   protected readonly linePaths = computed(() => {
-    const segments: string[] = [];
-    let current: string[] = [];
+    const marks = this.marks();
 
-    for (const mark of this.marks()) {
-      if (mark.y === null) {
-        if (current.length > 1) {
-          segments.push(current.join(' '));
-        }
-        current = [];
-        continue;
-      }
-
-      current.push(`${current.length === 0 ? 'M' : 'L'} ${mark.x} ${mark.y}`);
-    }
-
-    if (current.length > 1) {
-      segments.push(current.join(' '));
-    }
-
-    return segments;
+    return this.runs()
+      .filter((run) => run.length > 1)
+      .map((run) =>
+        run
+          .map(
+            (index, position) =>
+              `${position === 0 ? 'M' : 'L'} ${marks[index].x} ${marks[index].y}`,
+          )
+          .join(' '),
+      );
   });
 
   /**
+   * Months whose neighbours are both blank. No line segment can reach them, so
+   * without a dot of their own they would simply be missing from the chart.
+   */
+  protected readonly isolatedPoints = computed(() => {
+    const marks = this.marks();
+
+    return this.runs()
+      .filter((run) => run.length === 1)
+      .map((run) => marks[run[0]]);
+  });
+
+  /**
+   * One band per run, matching `linePaths`: a single polygon over every plotted
+   * month would close straight across a gap and fill under a month that has no
+   * figure at all.
+   *
    * Only drawn when zero is inside the domain. A line may sit on a padded range
    * -- that is how a small move in a large balance stays visible -- but filling
    * underneath it would then read as area-from-nothing and overstate the growth.
    */
-  protected readonly areaPath = computed(() => {
+  protected readonly areaPaths = computed<string[]>(() => {
     const scale = this.scale();
-    const plotted = this.marks().filter((mark) => mark.y !== null);
 
-    if (plotted.length < 2 || scale.min > 0 || scale.max < 0) {
-      return '';
+    if (scale.min > 0 || scale.max < 0) {
+      return [];
     }
 
+    const marks = this.marks();
     const baseline = scaleY(0, scale, TOP, this.plotHeight());
-    const top = plotted.map((mark, index) => `${index === 0 ? 'M' : 'L'} ${mark.x} ${mark.y}`);
 
-    return [
-      ...top,
-      `L ${plotted[plotted.length - 1].x} ${baseline}`,
-      `L ${plotted[0].x} ${baseline}`,
-      'Z',
-    ].join(' ');
+    return this.runs()
+      .filter((run) => run.length > 1)
+      .map((run) =>
+        [
+          ...run.map(
+            (index, position) =>
+              `${position === 0 ? 'M' : 'L'} ${marks[index].x} ${marks[index].y}`,
+          ),
+          `L ${marks[run[run.length - 1]].x} ${baseline}`,
+          `L ${marks[run[0]].x} ${baseline}`,
+          'Z',
+        ].join(' '),
+      );
   });
 
   protected readonly lastPoint = computed(() => {

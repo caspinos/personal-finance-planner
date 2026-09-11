@@ -1,4 +1,12 @@
-import { bandCenter, columnPath, labelStride, niceScale, niceStep, scaleY } from './chart-geometry';
+import {
+  bandCenter,
+  columnPath,
+  definedRuns,
+  labelStride,
+  niceScale,
+  niceStep,
+  scaleY,
+} from './chart-geometry';
 
 describe('niceStep', () => {
   it('rounds up to 1, 2, 5 or 10 times a power of ten', () => {
@@ -124,5 +132,27 @@ describe('labelStride', () => {
   it('stays at one for a degenerate chart', () => {
     expect(labelStride(1, 0, 42)).toBe(1);
     expect(labelStride(12, 0, 42)).toBe(1);
+  });
+});
+
+describe('definedRuns', () => {
+  it('keeps an unbroken series as one run', () => {
+    expect(definedRuns([100, 200, 300])).toEqual([[0, 1, 2]]);
+  });
+
+  it('splits at a month with no figure, so no mark spans the gap', () => {
+    // A line or an area drawn straight across index 1 would imply a value
+    // that was never recorded.
+    expect(definedRuns([100, null, 200, 300])).toEqual([[0], [2, 3]]);
+  });
+
+  it('drops leading and trailing gaps rather than emitting empty runs', () => {
+    expect(definedRuns([null, 100, 200, null])).toEqual([[1, 2]]);
+    expect(definedRuns([null, null])).toEqual([]);
+    expect(definedRuns([])).toEqual([]);
+  });
+
+  it('reports a lone observation as its own single-index run', () => {
+    expect(definedRuns([null, 100, null])).toEqual([[1]]);
   });
 });
