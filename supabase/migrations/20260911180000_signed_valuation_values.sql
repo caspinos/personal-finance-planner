@@ -12,16 +12,31 @@
 -- makes `signed_value`/`signed_value_in_base` redundant -- the summary drops
 -- them and callers read `value`/`value_in_base`.
 
--- 1. Allow negative valuations ------------------------------------------------
-
+-- 1. Allow negative valuations, and move existing liabilities onto the new
+--    convention ---------------------------------------------------------------
+--
 -- The original `check (value >= 0)` was declared inline, so Postgres generated
 -- its name. Drop every check constraint that mentions the column rather than
 -- assuming either the generated name or the pretty-printed predicate: this
 -- table has exactly one, and it is the one being lifted.
+--
+-- That same constraint is what marks a database as still being on the old
+-- convention, so the sign flip is tied to it. Re-running this migration finds
+-- no constraint, skips the flip, and leaves the data alone -- otherwise a
+-- second run would quietly flip every liability back.
 do $$
 declare
   target record;
+  on_old_convention boolean;
 begin
+  select exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.asset_valuations'::regclass
+      and contype = 'c'
+      and pg_get_constraintdef(oid) like '%value%'
+  ) into on_old_convention;
+
   for target in
     select conname
     from pg_constraint
@@ -31,22 +46,22 @@ begin
   loop
     execute format('alter table public.asset_valuations drop constraint %I', target.conname);
   end loop;
+
+  if on_old_convention then
+    update public.asset_valuations av
+    set value = -av.value
+    from public.asset_accounts aa
+    where aa.id = av.asset_account_id
+      and aa.type = 'liability'
+      and av.value <> 0;
+  end if;
 end;
 $$;
 
 comment on column public.asset_valuations.value is
   'Balance as of valued_on, in the valuation currency, signed the way it contributes to net worth: negative for a debt or an overdrawn account, positive for an asset or an overpaid liability.';
 
--- 2. Move existing liability valuations onto the new convention ---------------
-
-update public.asset_valuations av
-set value = -av.value
-from public.asset_accounts aa
-where aa.id = av.asset_account_id
-  and aa.type = 'liability'
-  and av.value <> 0;
-
--- 3. Stop flipping the sign in the summary ------------------------------------
+-- 2. Stop flipping the sign in the summary ------------------------------------
 --
 -- Otherwise unchanged from 20260911170000_net_worth_summary_last_valued_on.sql:
 -- p_include_archived and last_valued_on keep working exactly as they do there.
