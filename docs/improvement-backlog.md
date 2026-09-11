@@ -66,7 +66,9 @@ reviewed.
   `pl`; the title is `PersonalFinancePlanner`; there is no `<meta
   name="description">`, no theme-color, no apple-touch icons.
 - **Proposed change:** set `document.documentElement.lang` from
-  `LanguageService` on language change; use a translated `<title>` via
+  `LanguageService` both at bootstrap (from the stored/active language, since
+  the static `index.html` says `en` while the default is `pl`) and on every
+  language change; use a translated `<title>` via
   `Title` service + route `title` (see also D-items on routes); add basic meta.
 - **Acceptance:** `lang` attribute follows the active language (AXE
   `html-has-lang` / `valid-lang`), page titles are translated per route.
@@ -92,8 +94,12 @@ reviewed.
   `site_url = "http://localhost:4200"` and
   `additional_redirect_urls = ["http://localhost:4200", "http://127.0.0.1:4200"]`
   (the second key is a TOML array).
-- **Acceptance:** local password-reset flow (once implemented, see C-items)
-  lands on the app.
+  When C10 adds an `/auth/reset` route, its full URL must be allowed too
+  (`http://localhost:4200/auth/reset`, or an intentional local wildcard such
+  as `http://localhost:4200/**`), because Supabase matches `redirectTo`
+  against this list.
+- **Acceptance:** local password-reset flow (once implemented, see C10)
+  lands on the app at the reset route without a redirect rejection.
 
 ### A6. Stored language is read from `localStorage` at bootstrap without validation (P2, S) 🔍
 - **Files:** `src/app/app.config.ts` (`readStoredLanguage`)
@@ -131,8 +137,11 @@ reviewed.
   check). As data grows, `get_envelope_balances` (correlated subqueries on
   `envelope_transfers`) and `get_net_worth_summary` (lateral + correlated
   `max(valued_on)`) become seq scans.
-- **Proposed change:** add btree indexes:
-  `household_members(user_id)`, `envelopes(household_id)`,
+- **Proposed change:** add btree indexes (the `household_members` primary
+  key `(household_id, user_id)` already covers the two-column predicate in
+  `is_household_member`; a single-column `user_id` index is optional and only
+  worth adding if a "list my memberships" query appears):
+  `envelopes(household_id)`,
   `budget_transactions(household_id, envelope_id, occurred_on)`,
   `budget_transactions(household_id, amortized_start_on) where amortized_months is not null`,
   `envelope_transfers(from_envelope_id, occurred_on)`,
@@ -191,10 +200,15 @@ reviewed.
   `commodity_prices`
 - **Problem:** Any string is accepted (`"pln"`, `"zł"`, empty). Rate lookup is
   an exact-match on `currency`, so a lowercase code silently yields "no rate".
-- **Proposed change:** add `check (currency ~ '^[A-Z]{3}$')` (and the same for
-  `base_currency`), normalise with `upper(btrim())` in the UI before saving,
-  and add a shared `ISO_CURRENCIES` list for selects.
-- **Acceptance:** inserting `'pln'` fails; UI selects only offer valid codes.
+- **Proposed change:** in the migration first normalise existing rows
+  (`update ... set currency = upper(btrim(currency))`) and abort with a clear
+  error if any row still fails the pattern (blank or not three letters), then
+  add `check (currency ~ '^[A-Z]{3}$')` (and the same for `base_currency`);
+  normalise with `upper(btrim())` in the UI before saving, and add a shared
+  `ISO_CURRENCIES` list for selects.
+- **Acceptance:** migration succeeds on a database seeded with lowercase
+  codes and fails loudly on an unrepairable value; inserting `'pln'` fails
+  afterwards; UI selects only offer valid codes.
 
 ### B5. Valuation currency can differ from the account currency (P2, S) 🔍
 - **Files:** `asset_valuations.currency`, `get_net_worth_summary`
@@ -237,7 +251,8 @@ reviewed.
 - **Files:** `get_holding_positions`
 - **Problem:** Only unrealized gain is computed; sells' realized P&L (sale
   proceeds minus average cost minus fees) is dropped, so a fully sold holding
-  shows nothing.
+  still appears as a position with quantity 0 and no record of what it
+  earned or lost.
 - **Proposed change:** add `realized_gain` and `sold_proceeds` to the function
   (weighted-average method, consistent with the accepted simplification) and
   display them in holding history.
@@ -341,8 +356,13 @@ reviewed.
   `envelopes` and `asset_accounts`, and on `(asset_account_id, lower(name))`
   for `asset_holdings` (the same instrument may legitimately be held in two
   accounts), where not archived (or unconditional), with a friendly error in
-  the forms.
-- **Acceptance:** creating a duplicate shows a translated validation error.
+  the forms. Existing data may already contain duplicates, so the migration
+  needs a preflight: either abort with a list of the offending rows, or
+  rename duplicates deterministically (e.g. append ` (2)`) before creating
+  the index - decide and document.
+- **Acceptance:** migration applies on a database seeded with duplicate
+  names (per the chosen policy); creating a duplicate afterwards shows a
+  translated validation error.
 
 
 ## C. Core services (`src/app/core`)
@@ -360,7 +380,9 @@ reviewed.
   `createClient<Database>`, derive the row interfaces from
   `Database['public']['Tables'][...]['Row']` / `Functions[...]['Returns']`,
   and add an npm script + CI step that fails when the generated file is
-  stale.
+  stale. Type generation needs a running database, so run that check in the
+  `e2e` job (which already starts the Supabase stack) or in a dedicated job
+  that runs `npx supabase start` first - not in `build-and-test`.
 - **Acceptance:** `tsc` catches a query against a non-existent column; no
   `as Record<string, unknown>` casts remain in services.
 
@@ -474,14 +496,14 @@ reviewed.
 ### C10. Auth is minimal: no password reset, no e-mail verification handling, no OAuth (P1, M) 🔍
 - **Files:** `AuthService`, `login.ts`, `register.ts`, `supabase/config.toml`
 - **Problem:** `AuthService` exposes only sign-in/up/out. There is no "forgot
-  password" flow, no handling of `signUp` returning no session when e-mail
-  confirmation is enabled in production (the Register page must tell the user
-  to check their inbox), no `PASSWORD_RECOVERY` event handling, and no
-  "change password / change e-mail" page.
+  password" flow, no `PASSWORD_RECOVERY` event handling, and no "change
+  password / change e-mail" page. (The Register page already handles
+  `signUp` returning no session by showing the translated "check your inbox"
+  state - keep that behaviour.)
 - **Proposed change:** add `resetPasswordForEmail`, an `/auth/reset` route
   that handles the recovery event and lets the user set a new password, and a
   profile/settings page. Verify the production project's "Confirm email"
-  setting and make Register handle both cases.
+  setting so the existing Register branch is exercised as intended.
 - **Acceptance:** e2e for reset (local stack, use the Inbucket/Mailpit URL to
   grab the link) and for the "check your inbox" state.
 
@@ -611,7 +633,9 @@ reviewed.
   `household-members.ts` check `currentRole()`. A viewer sees "Record
   transaction", "New account", "Delete", opens the forms and gets an RLS error
   after submitting. `currentRole` is also derived from `loadMembers()` (an RPC
-  returning all members' e-mails) which each page has to call.
+  returning all members' e-mails), which the three pages that gate on role
+  (`household-members.ts`, `envelope-history.ts`, `rates.ts`) each call
+  explicitly.
 - **Proposed change:** load the caller's own membership row (or return
   `role` from `loadHouseholds` by joining `household_members`) once in
   `HouseholdService`; expose `canEdit`/`isOwner` computed signals; hide or
@@ -655,8 +679,10 @@ reviewed.
   (`hlmFieldLabel` + `id`/`aria-labelledby` on the select trigger), add
   `aria-label` to grid inputs, `routerLinkActive` with `ariaCurrentWhenActive`,
   heading hierarchy, focus management after route change.
-- **Acceptance:** axe reports zero serious/critical violations across the
-  e2e pages; CI enforces it.
+- **Acceptance:** axe reports zero violations of any impact level across
+  the e2e pages (matching the `AGENTS.md` "MUST pass all AXE checks" rule),
+  or each remaining one is listed with a justification in an explicit
+  allow-list; CI enforces it.
 
 ### D11. Form UX consistency (P2, M) 🔍
 - **Files:** all `*-form.ts`
@@ -760,10 +786,14 @@ reviewed.
 ### D19. Data export (P1, M) 🔍
 - **Files:** new `features/settings/export`, new RPC or client-side
 - **Problem:** MVP item 12 "user/household data export" is missing.
-- **Proposed change:** "Export household data" button producing a JSON (all
-  tables for the household, RLS-filtered) and CSV per table, generated
-  client-side from paginated selects, downloaded via Blob; document the format
-  for future import.
+- **Proposed change:** "Export household data" button producing a JSON and
+  CSV per table from an explicit allow-list of domain tables (envelopes,
+  budget transactions/transfers, recurring rules, accounts, valuations,
+  holdings, holding transactions, rates, commodity prices, members without
+  e-mails of others unless owner), generated client-side from paginated
+  selects, downloaded via Blob. Never export `household_invites.token` (a
+  bearer credential for pending invites). Document the format for future
+  import.
 - **Acceptance:** e2e downloads the file and checks it contains the created
   envelope.
 
@@ -842,6 +872,9 @@ reviewed.
   the real behaviour until C8 lands.
 - Section 4 "⬜ Automatic rate fetching" is partially done (Frankfurter
   fetch + sync).
+- Section 4 also claims the UI shows a "no exchange rate" warning "instead
+  of a wrong number", but `totalNetWorth` and the group subtotals still add
+  the raw foreign amount (C4); the map should not claim this until C4 lands.
 - Global history page, net worth timeline, Polish translation/language
   switch, amortized expenses in history, name suggestions are not listed.
 - **Proposed change:** update statuses and add the missing rows; add a
