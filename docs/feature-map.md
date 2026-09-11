@@ -69,6 +69,10 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 - ✅ Budget UI: envelope list with per-month balances, month switcher,
   "New envelope", "Record transaction" (expense/income toggle), "Transfer"
   forms — all built with spartan/ui (`select`, `toggle-group`, `field`, etc.)
+- ✅ Compact, mobile-first envelope list: each envelope is a single dense row
+  (name + balance on one line, icon-only history/rename actions with
+  `aria-label`s) instead of a full-height card, so many envelopes fit on a
+  phone screen. The recurring-rules list uses the same dense row layout
 - ✅ End-to-end verified in-browser: create envelopes, record a transaction,
   transfer between envelopes, balances carry over to the next month
 - ✅ Editing/deleting individual transactions or transfers from the UI
@@ -112,9 +116,12 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   sign flipping — valuations already carry their sign)
 - ✅ `NetWorthService` (Angular): load accounts, load summary, create
   account, record valuation
-- ✅ Net worth UI: total net worth card, per-account cards with latest
+- ✅ Net worth UI: total net worth card, per-account rows with latest
   valuation, "New account" and "Add valuation" forms, wired into routing
-  and shell/dashboard navigation — all built with spartan/ui
+  and shell/dashboard navigation — all built with spartan/ui. Accounts render
+  as compact, mobile-first rows (name + value, then liquidity/category/
+  valuation date, with icon-only history and add-valuation actions carrying
+  `aria-label`s)
 - ✅ Asset classification (type, liquidity, category) surfaced in the net
   worth summary UI: accounts are grouped by type with per-group subtotals,
   and a liquidity filter narrows the view

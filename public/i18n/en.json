@@ -74,7 +74,6 @@
     "loadingEnvelopes": "Loading envelopes…",
     "noEnvelopesTitle": "No envelopes yet",
     "noEnvelopesDescription": "Create your first envelope to start budgeting.",
-    "balanceAsOf": "Balance as of {{month}}",
     "noRateSet": "No {{currency}} rate set",
     "viewHistory": "View history",
     "rename": "Rename",
