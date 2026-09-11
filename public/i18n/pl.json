@@ -429,6 +429,7 @@
     "valueError": "Wycena nie może być ujemna.",
     "noValuesError": "Podaj wycenę dla co najmniej jednego rachunku.",
     "filledSummary": "Wypełniono {{filled}} z {{total}} rachunków · puste wiersze są pomijane",
+    "loadErrorTitle": "Nie udało się wczytać rachunków",
     "errorTitle": "Nie udało się zapisać wycen",
     "submit": "Zapisz wyceny"
   },

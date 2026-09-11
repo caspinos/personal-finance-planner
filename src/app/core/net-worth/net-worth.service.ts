@@ -318,10 +318,11 @@ export class NetWorthService {
   }
 
   /**
-   * Records valuations for several accounts sharing one date in a single round
-   * trip. Rows already stored for an account on that date are overwritten (the
-   * table has a unique constraint on account + date), so the bulk form can be
-   * reopened for a date that was only partly filled in.
+   * Records valuations for several accounts sharing one date. Accounts that
+   * already have a valuation on that date are corrected in place rather than
+   * replaced, so reopening the bulk form for a partly filled date keeps each
+   * row's original `created_by` and any field this call does not supply (a
+   * note recorded from the single-valuation form, say).
    */
   async recordValuations(input: {
     valuedOn: Date;
@@ -341,28 +342,79 @@ export class NetWorthService {
       return [];
     }
 
-    const { data, error } = await this.supabase
+    // Split the entries by whether a row already exists for that account and
+    // date: an upsert would rewrite every column, and the columns it would
+    // send are not the whole row.
+    const { data: existing, error: existingError } = await this.supabase
       .from('asset_valuations')
-      .upsert(
-        input.entries.map((entry) => ({
-          household_id: householdId,
-          asset_account_id: entry.accountId,
-          valued_on: valuedOn,
+      .select('id, asset_account_id')
+      .eq('household_id', householdId)
+      .eq('valued_on', valuedOn)
+      .in(
+        'asset_account_id',
+        input.entries.map((entry) => entry.accountId),
+      );
+
+    if (existingError) {
+      throw existingError;
+    }
+
+    const existingIdByAccount = new Map<string, string>(
+      (existing ?? []).map((row) => [row.asset_account_id, row.id]),
+    );
+
+    const inserts = input.entries.filter((entry) => !existingIdByAccount.has(entry.accountId));
+    const updates = input.entries.filter((entry) => existingIdByAccount.has(entry.accountId));
+    const saved: AssetValuation[] = [];
+
+    if (inserts.length > 0) {
+      const { data, error } = await this.supabase
+        .from('asset_valuations')
+        .insert(
+          inserts.map((entry) => ({
+            household_id: householdId,
+            asset_account_id: entry.accountId,
+            valued_on: valuedOn,
+            value: entry.value,
+            currency: entry.currency,
+            contribution_amount: entry.contributionAmount ?? 0,
+            note: entry.note || null,
+            created_by: userId,
+          })),
+        )
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      saved.push(...(data ?? []));
+    }
+
+    // Each correction targets one row, so these go one at a time; a household's
+    // account list is small enough for that to stay a handful of requests.
+    for (const entry of updates) {
+      const { data, error } = await this.supabase
+        .from('asset_valuations')
+        .update({
           value: entry.value,
           currency: entry.currency,
           contribution_amount: entry.contributionAmount ?? 0,
-          note: entry.note || null,
-          created_by: userId,
-        })),
-        { onConflict: 'asset_account_id,valued_on' },
-      )
-      .select();
+          ...(entry.note === undefined ? {} : { note: entry.note || null }),
+        })
+        .eq('household_id', householdId)
+        .eq('id', existingIdByAccount.get(entry.accountId)!)
+        .select()
+        .single();
 
-    if (error) {
-      throw error;
+      if (error) {
+        throw error;
+      }
+
+      saved.push(data);
     }
 
-    return data ?? [];
+    return saved;
   }
 
   /** Loads every valuation recorded across the household on one given date. */

@@ -429,6 +429,7 @@
     "valueError": "Values cannot be negative.",
     "noValuesError": "Enter a value for at least one account.",
     "filledSummary": "{{filled}} of {{total}} accounts filled in · blank rows are skipped",
+    "loadErrorTitle": "Couldn't load the accounts",
     "errorTitle": "Couldn't save the valuations",
     "submit": "Save valuations"
   },

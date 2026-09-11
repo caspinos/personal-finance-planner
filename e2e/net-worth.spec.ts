@@ -230,6 +230,28 @@ test.describe('Net worth', () => {
     await expect(savings.getByText('No valuation recorded yet')).toBeVisible();
   });
 
+  test('keeps a note the bulk grid does not edit when correcting that date', async ({ page }) => {
+    await createAccount(page, { name: 'Checking account' });
+    await addValuationFromAccountCard(page, {
+      account: 'Checking account',
+      value: '1200',
+      note: 'Statement balance',
+    });
+    await page.getByRole('link', { name: 'Back to net worth' }).click();
+
+    // The bulk grid never edits the note, so correcting today's value through
+    // it must leave the note recorded by the single-valuation form intact.
+    await recordBulkValuations(page, [{ account: 'Checking account', value: '1500' }]);
+    await expectAccountValue(page, 'Checking account', '1,500.00 PLN');
+
+    await page
+      .locator('[hlmCard]')
+      .filter({ hasText: 'Checking account' })
+      .getByRole('link', { name: 'View history' })
+      .click();
+    await expect(page.getByText('Statement balance')).toBeVisible();
+  });
+
   test('archives and unarchives an account from its history page', async ({ page }) => {
     await createAccount(page, { name: 'Savings account' });
     await addValuationFromAccountCard(page, { account: 'Savings account', value: '300' });

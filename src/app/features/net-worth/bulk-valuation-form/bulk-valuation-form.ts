@@ -91,12 +91,19 @@ function createRow(): ValuationRowGroup {
         </div>
       </div>
 
+      @if (loadErrorMessage()) {
+        <div hlmAlert variant="destructive">
+          <p hlmAlertTitle>{{ 'bulkValuationForm.loadErrorTitle' | transloco }}</p>
+          <p hlmAlertDescription>{{ loadErrorMessage() }}</p>
+        </div>
+      }
+
       @if (loading()) {
         <div class="text-muted-foreground flex items-center gap-2 text-sm">
           <hlm-spinner />
           {{ 'bulkValuationForm.loading' | transloco }}
         </div>
-      } @else if (accounts().length === 0) {
+      } @else if (accounts().length === 0 && !loadErrorMessage()) {
         <div hlmCard class="max-w-md">
           <div hlmCardHeader>
             <h2 hlmCardTitle>{{ 'bulkValuationForm.noAccountsTitle' | transloco }}</h2>
@@ -172,7 +179,7 @@ function createRow(): ValuationRowGroup {
                 <tbody>
                   @for (group of groupedAccounts(); track group.type) {
                     <tr class="bg-muted/50">
-                      <th scope="colgroup" colspan="4" class="px-3 py-1.5 text-left font-semibold">
+                      <th scope="rowgroup" colspan="4" class="px-3 py-1.5 text-left font-semibold">
                         {{ accountTypeLabel(group.type) }}
                       </th>
                     </tr>
@@ -239,14 +246,14 @@ function createRow(): ValuationRowGroup {
             }}
           </p>
 
-          @if (errorMessage()) {
+          @if (saveErrorMessage()) {
             <div hlmAlert variant="destructive">
               <p hlmAlertTitle>{{ 'bulkValuationForm.errorTitle' | transloco }}</p>
-              <p hlmAlertDescription>{{ errorMessage() }}</p>
+              <p hlmAlertDescription>{{ saveErrorMessage() }}</p>
             </div>
           }
 
-          <button hlmBtn type="submit" class="self-start" [disabled]="submitting()">
+          <button hlmBtn type="submit" class="self-start" [disabled]="submitting() || prefilling()">
             @if (submitting()) {
               <hlm-spinner />
               {{ 'common.saving' | transloco }}
@@ -270,7 +277,10 @@ export class BulkValuationForm {
   protected readonly prefilling = signal(false);
   protected readonly submitting = signal(false);
   protected readonly submitted = signal(false);
-  protected readonly errorMessage = signal<string | null>(null);
+  /** Failures loading accounts or a date's valuations — reported page-level. */
+  protected readonly loadErrorMessage = signal<string | null>(null);
+  /** Failures saving the grid — reported next to the submit button. */
+  protected readonly saveErrorMessage = signal<string | null>(null);
   protected readonly existingCount = signal(0);
 
   /**
@@ -352,13 +362,14 @@ export class BulkValuationForm {
 
   protected async submit(): Promise<void> {
     this.submitted.set(true);
-    this.errorMessage.set(null);
+    this.saveErrorMessage.set(null);
 
     const entries = this.filledEntries();
 
     if (
       this.form.invalid ||
       this.submitting() ||
+      this.prefilling() ||
       entries.length === 0 ||
       entries.some((entry) => entry.value < 0)
     ) {
@@ -378,7 +389,7 @@ export class BulkValuationForm {
 
       await this.router.navigateByUrl('/net-worth');
     } catch (error) {
-      this.errorMessage.set(this.extractMessage(error));
+      this.saveErrorMessage.set(this.extractMessage(error));
     } finally {
       this.submitting.set(false);
     }
@@ -418,7 +429,7 @@ export class BulkValuationForm {
 
   private async loadInitialData(): Promise<void> {
     this.loading.set(true);
-    this.errorMessage.set(null);
+    this.loadErrorMessage.set(null);
 
     try {
       await this.netWorth.loadAccounts();
@@ -430,7 +441,7 @@ export class BulkValuationForm {
 
       await this.prefillForSelectedDate();
     } catch (error) {
-      this.errorMessage.set(this.extractMessage(error));
+      this.loadErrorMessage.set(this.extractMessage(error));
     } finally {
       this.loading.set(false);
     }
@@ -490,7 +501,7 @@ export class BulkValuationForm {
       );
     } catch (error) {
       if (request === this.prefillRequest) {
-        this.errorMessage.set(this.extractMessage(error));
+        this.loadErrorMessage.set(this.extractMessage(error));
       }
     } finally {
       if (request === this.prefillRequest) {
