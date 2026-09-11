@@ -147,8 +147,12 @@ reviewed.
   `envelope_transfers(from_envelope_id, occurred_on)`,
   `envelope_transfers(to_envelope_id, occurred_on)`,
   `recurring_envelope_rules(household_id, active, next_run_on)`,
-  `asset_accounts(household_id)`, `asset_holdings(asset_account_id)`,
-  `asset_transactions(asset_holding_id, occurred_on)`,
+  `asset_accounts(household_id)`,
+  `asset_holdings(household_id, asset_account_id)`, and indexes led by
+  `household_id` for the holding-position RPC: one supporting the buy/sell
+  aggregates (for example, `(household_id, type, occurred_on,
+  asset_holding_id)`) and one supporting its latest-price `distinct on`
+  (`(household_id, asset_holding_id, occurred_on desc, created_at desc)`),
   `exchange_rates(household_id, currency, rate_date desc)` (unique already
   covers this order - verify), `household_invites(household_id)`,
   `household_invites(lower(email)) where accepted_at is null and revoked_at is null`.
@@ -171,12 +175,16 @@ reviewed.
   any future second trigger path (pg_cron, B3) would need one. The current
   function itself is safe against concurrent callers (`FOR UPDATE` serialises
   them) and against partial failure (one transaction).
-- **Proposed change:** add `recurring_rule_id uuid references
-  recurring_envelope_rules(id) on delete restrict` and a unique index
-  `(recurring_rule_id, occurred_on)`; insert `on conflict do nothing`. Surface
-  the origin in the history views (badge "recurring"). When a rule is deleted,
-  either delete its generated rows first (user's choice: "delete future/all
-  generated") or soft-delete the rule (`deleted_at`) so provenance survives.
+- **Proposed change:** add `recurring_rule_id uuid` and scope it to the
+  transaction's household: add `unique (id, household_id)` to
+  `recurring_envelope_rules`, then `foreign key (recurring_rule_id,
+  household_id) references recurring_envelope_rules (id, household_id) on
+  delete restrict`. Add a unique partial index `(recurring_rule_id,
+  occurred_on) where recurring_rule_id is not null`; insert `on conflict do
+  nothing`. Surface the origin in the history views (badge "recurring"). When
+  a rule is deleted, either delete its generated rows first (user's choice:
+  "delete future/all generated") or soft-delete the rule (`deleted_at`) so
+  provenance survives.
 - **Acceptance:** re-running the RPC never duplicates; history shows the rule
   origin; e2e for delete-rule behaviour.
 
@@ -191,14 +199,17 @@ reviewed.
   as a fallback. The existing RPC cannot be the cron entry point as written:
   it calls `is_household_member`, which fails when `auth.uid()` is null. Split
   it into an internal `process_due_recurring_rules_for(p_household_id)`
-  (security definer, `revoke execute from public/anon/authenticated`, only
-  callable by the cron job / service role) that loops over all households
-  with due rules, and keep the user-scoped RPC as a thin membership-checking
-  wrapper around it; (b) rename/clarify `last_run_on` semantics (store last
-  generated `occurred_on`); (c) optionally cap backfill (e.g. do not generate
-  more than N months and warn).
+  (security definer, `revoke execute from public/anon/authenticated`) that
+  processes one household, plus a service-role-only global sweep (for example,
+  no-argument `process_all_due_recurring_rules()`) that enumerates every
+  household with due rules and calls the internal function. Keep the
+  user-scoped RPC as a thin membership-checking wrapper around the internal
+  single-household function; (b) rename/clarify `last_run_on` semantics (store
+  last generated `occurred_on`); (c) optionally cap backfill (e.g. do not
+  generate more than N months and warn).
 - **Acceptance:** documented trigger strategy in `docs/feature-map.md`;
-  transactions appear without opening the app.
+  transactions in two households with due rules appear without either user
+  opening the app.
 
 ### B4. `households.base_currency` and other currency columns are unconstrained text (P2, S) 🔍
 - **Files:** migrations for `households`, `budget_transactions`,
@@ -344,13 +355,17 @@ reviewed.
   too, and in `get_envelope_balances` convert every row into the base
   currency through the PLN pivot as of its own date
   (`amount * get_exchange_rate(h, row.currency, occurred_on)
-  / get_exchange_rate(h, base_currency, occurred_on)`), returning `null`
-  when any row of an envelope has no rate. Define first which date the
-  rate is taken from (transaction date vs. `p_as_of`) and what a
-  transfer between envelopes in different currencies means.
+  / get_exchange_rate(h, base_currency, occurred_on)`). Add an explicit
+  missing-rate completeness check (for example a missing-rate count or
+  `bool_and`): `sum(...)` ignores null expressions, so it alone must not
+  produce a partial balance when any row lacks a required rate. Return `null`
+  for the whole envelope in that case. Define first which date the rate is
+  taken from (transaction date vs. `p_as_of`) and what a transfer between
+  envelopes in different currencies means.
   Document the decision in `docs/project-assumptions-and-plan.md`.
 - **Acceptance:** no dead column, or per-transaction conversion covered by an
-  e2e.
+  e2e including a missing-rate case that marks the entire envelope balance as
+  unavailable rather than showing a partial number.
 
 ### B13. `contribution_amount` is stored but never used analytically, and its liability-side sign convention is undefined (P2, M) 🔍
 - **Files:** `20260911180000_signed_valuation_values.sql`, `valuation-form.ts`,
