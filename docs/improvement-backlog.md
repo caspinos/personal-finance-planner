@@ -187,10 +187,16 @@ reviewed.
   callable by viewers. `last_run_on` records the processing date, not the last
   occurrence date, which is misleading in the UI.
 - **Proposed change:** (a) schedule via `pg_cron` (Supabase supports it) or a
-  Supabase Edge Function cron as the primary trigger, keep the client call as
-  a fallback; (b) rename/clarify `last_run_on` semantics (store last generated
-  `occurred_on`); (c) optionally cap backfill (e.g. do not generate more than N
-  months and warn).
+  Supabase Edge Function cron as the primary trigger, keeping the client call
+  as a fallback. The existing RPC cannot be the cron entry point as written:
+  it calls `is_household_member`, which fails when `auth.uid()` is null. Split
+  it into an internal `process_due_recurring_rules_for(p_household_id)`
+  (security definer, `revoke execute from public/anon/authenticated`, only
+  callable by the cron job / service role) that loops over all households
+  with due rules, and keep the user-scoped RPC as a thin membership-checking
+  wrapper around it; (b) rename/clarify `last_run_on` semantics (store last
+  generated `occurred_on`); (c) optionally cap backfill (e.g. do not generate
+  more than N months and warn).
 - **Acceptance:** documented trigger strategy in `docs/feature-map.md`;
   transactions appear without opening the app.
 
@@ -202,7 +208,11 @@ reviewed.
   an exact-match on `currency`, so a lowercase code silently yields "no rate".
 - **Proposed change:** in the migration first normalise existing rows
   (`update ... set currency = upper(btrim(currency))`) and abort with a clear
-  error if any row still fails the pattern (blank or not three letters), then
+  error if any row still fails the pattern (blank or not three letters). In
+  `exchange_rates` handle rows whose normalised value would become `PLN`
+  explicitly (delete them or fail with a clear message) *before* the update,
+  because the existing `currency <> 'PLN'` check would otherwise abort the
+  normalisation itself. Then
   add `check (currency ~ '^[A-Z]{3}$')` (and the same for `base_currency`);
   normalise with `upper(btrim())` in the UI before saving, and add a shared
   `ISO_CURRENCIES` list for selects.
@@ -272,10 +282,16 @@ reviewed.
   `households` row no longer exists, i.e. `not exists (select 1 from
   households where id = old.household_id)`, which is the case inside an
   `on delete cascade`); make `accept_household_invite` never lower an existing
-  role (or skip the conflict). Reflect in UI (disable the action for the last
-  owner).
+  role (or skip the conflict). The check must be serialised per household,
+  otherwise two owners demoting/removing themselves concurrently each see
+  the other still present and both succeed: take a row lock on the parent
+  `households` row (`select 1 from households where id = ... for update`)
+  or `pg_advisory_xact_lock(hashtext(household_id::text))` at the start of
+  the trigger before counting owners. Reflect in UI (disable the action for
+  the last owner).
 - **Acceptance:** SQL test / e2e: demoting the last owner fails with a clear
-  message.
+  message; a pgTAP or script test with two concurrent sessions leaves at
+  least one owner.
 
 ### B10. No `updated_at` / audit trail on domain tables (P2, M) 🔍
 - **Files:** all domain tables
@@ -297,9 +313,15 @@ reviewed.
   (`get_household_members`, `process_due_recurring_rules`,
   `accept_household_invite`) are callable unauthenticated and rely solely on
   `auth.uid()` being null. Confirm with `\df+` / Supabase advisor.
-- **Proposed change:** `revoke execute on function ... from public, anon` for
-  every function in a new migration; set `alter default privileges ... revoke
-  execute on functions from public` for the schema.
+- **Proposed change:** in a new migration, for every function in `public`:
+  `revoke execute on function ... from public, anon` **and** `grant execute
+  ... to authenticated` (revoking from `public` also removes the implicit
+  grant `authenticated` relies on; the `is_household_*` helpers used inside
+  RLS policies currently have no explicit grant at all, so skipping the
+  re-grant would make every table query fail with permission denied). Also
+  `grant execute ... to service_role` where a cron/edge path needs it (B3).
+  Then set `alter default privileges in schema public revoke execute on
+  functions from public` so future functions start locked down.
 - **Acceptance:** Supabase security advisor shows no "function exposed to
   anon" findings.
 
@@ -322,14 +344,17 @@ reviewed.
 - **Acceptance:** no dead column, or per-transaction conversion covered by an
   e2e.
 
-### B13. `contribution_amount` is stored but never used analytically, and its sign convention is undocumented (P2, M) 🔍
+### B13. `contribution_amount` is stored but never used analytically, and its liability-side sign convention is undefined (P2, M) 🔍
 - **Files:** `20260911180000_signed_valuation_values.sql`, `valuation-form.ts`,
   `bulk-valuation-form.ts`, `account-history.ts`, `net-worth-timeline.ts`
 - **Problem:** `value` became signed, but `contribution_amount` was not
   touched and nothing derives "market/FX movement = delta - contributions"
   from it: the timeline shows totals and month-over-month change only, and the
-  account history merely prints the raw number. For a liability, is a
-  repayment a positive or a negative contribution? Nothing says.
+  account history merely prints the raw number. The general convention is
+  defined only in the bulk form's field label ("deposits minus withdrawals
+  since the last valuation", `public/i18n/en.json`), not in the schema; and
+  for a liability it is undefined: is a repayment a positive or a negative
+  contribution?
 - **Proposed change:** document the convention with a `comment on column`
   (suggested: positive = money put in / repaid, negative = withdrawn / drawn
   down, from the household's point of view), align the two forms' helper text,
@@ -364,6 +389,31 @@ reviewed.
   names (per the chosen policy); creating a duplicate afterwards shows a
   translated validation error.
 
+
+### B16. Child rows can reference parents from another household (cross-tenant write) (P0, M) 🔍
+- **Files:** `budget_transactions.envelope_id`, `envelope_transfers.from/to_envelope_id`,
+  `recurring_envelope_rules.envelope_id`, `asset_valuations.asset_account_id`,
+  `asset_holdings.asset_account_id`, `asset_transactions.asset_holding_id`
+  and their insert/update policies
+- **Problem:** Every child table stores its own `household_id` and the RLS
+  `with check` validates only that column (`is_household_editor(household_id)`),
+  while the parent reference is a single-column foreign key that Postgres
+  validates without RLS. An editor of household A who knows an envelope or
+  account UUID from household B can insert a row with `household_id = A` and
+  `envelope_id = <B's envelope>`; `get_envelope_balances(B)` joins on
+  `envelope_id` alone, so B's balances change with a row B cannot even see.
+  The same applies to transfers, valuations, holdings and holding
+  transactions.
+- **Proposed change:** make the parent references household-scoped: add a
+  unique constraint `(id, household_id)` on `envelopes`, `asset_accounts`,
+  `asset_holdings`, and change each child FK to a composite
+  `foreign key (envelope_id, household_id) references envelopes (id,
+  household_id)` (same for accounts/holdings); alternatively a `before
+  insert or update` trigger raising when parent and child households
+  differ. Add `and household_id = <parent's>` filters to the derived-state
+  functions as defence in depth.
+- **Acceptance:** pgTAP/SQL test: inserting a transaction whose envelope
+  belongs to another household fails; e2e regression with two households.
 
 ## C. Core services (`src/app/core`)
 
@@ -427,9 +477,14 @@ reviewed.
 - **Proposed change:** make `totalNetWorth` `null` (or an object
   `{ value, incomplete: true }`) when any row is unconverted, and render
   "incomplete - N accounts without a rate" instead of a figure; same rule for
-  per-group subtotals in `net-worth.ts`.
-- **Acceptance:** e2e (`multi-currency.spec.ts`) asserts that the total is
-  not shown as a number when a rate is missing.
+  per-group subtotals in `net-worth.ts` and for the timeline
+  (`timelineCellValue` and `columnTotals` in `net-worth-timeline.ts` use the
+  same `value_in_base ?? value` fallback, and the timeline's
+  `hasUnconvertedRows` notice reads the current snapshot rather than the
+  timeline rows).
+- **Acceptance:** e2e (`multi-currency.spec.ts`) asserts that the total,
+  the group subtotal and a timeline column total are not shown as plain
+  numbers when a rate is missing; unit test for `timelineCellValue`.
 
 ### C5. Timeline fires one RPC per month (P1, M) 🔍
 - **Files:** `NetWorthService.loadTimeline`, `net-worth-timeline.ts`,
@@ -522,9 +577,11 @@ reviewed.
   `base=PLN&symbols=...` and `1/rate`.
 - **Acceptance:** unit tests with an `HttpTestingController`.
 
-### C12. Language / household id read from `localStorage` at construction without guards (P2, S) 🔍
-- **Files:** `household.service.ts` (`currentHouseholdIdSignal` initializer),
-  `language.service.ts`, `app.config.ts`
+### C12. `localStorage` is accessed directly without guards (P2, S) 🔍
+- **Files:** `household.service.ts` (read at construction in the
+  `currentHouseholdIdSignal` initializer and write in `selectHousehold`),
+  `app.config.ts` (read at bootstrap in `readStoredLanguage`),
+  `language.service.ts` (write in `setLanguage`)
 - **Problem:** Direct `localStorage` access throws in some environments
   (Safari private mode with storage disabled, tests without jsdom storage)
   and is untestable. See also A6.
@@ -639,8 +696,9 @@ reviewed.
 - **Proposed change:** load the caller's own membership row (or return
   `role` from `loadHouseholds` by joining `household_members`) once in
   `HouseholdService`; expose `canEdit`/`isOwner` computed signals; hide or
-  disable mutation entry points for viewers; add a `roleGuard` on the `/new`
-  and `/edit` routes.
+  disable mutation entry points for viewers; add a `roleGuard` on every
+  mutation route (`/new`, `/edit`, `/delete`, `/funding/new`,
+  `/valuations/bulk`) or on a mutation parent route.
 - **Acceptance:** e2e as a viewer: no mutation buttons, direct navigation to a
   form redirects with a message.
 
@@ -690,9 +748,10 @@ reviewed.
   each form page scrolls past the header; most forms have no Cancel/Back
   link (`envelope-delete` and `bulk-valuation-form` are the exceptions);
   numeric fields start at `0` instead of empty
-  (`amount: [0]`), so the user must clear the field; after saving from an
-  envelope's history the app navigates to `/budget` (context lost); no
-  `autofocus`; `hlm-select` placeholder duplicates the label.
+  (`amount: [0]`), so the user must clear the field; edit flows already
+  return to the envelope's history, but creating a transaction or transfer
+  from that page returns to `/budget` (context lost); no `autofocus`;
+  `hlm-select` placeholder duplicates the label.
 - **Proposed change:** shared `FormPage` layout (title, description, actions
   row with Cancel returning to `history.back()` or a `returnTo` query param),
   `null` initial values with `Validators.required`, focus the first field on
@@ -720,8 +779,11 @@ reviewed.
   the user needs most.
 - **Proposed change:** `upsertExchangeRate` (`onConflict:
   'household_id,currency,rate_date'`); derive the currency list from
-  `asset_accounts` + `asset_holdings` + existing rates (minus PLN); one
-  request with `base=PLN&symbols=A,B,C` and invert (see C11).
+  `asset_accounts` + `asset_holdings` + `households.base_currency` +
+  existing rates (minus PLN - the base currency is the denominator in every
+  conversion, so a EUR-based household with only PLN accounts still needs a
+  EUR rate); one request with `base=PLN&symbols=A,B,C` and invert (see
+  C11).
 - **Acceptance:** syncing twice in a day succeeds; a new foreign-currency
   account gets a rate after sync.
 
@@ -876,7 +938,7 @@ reviewed.
   of a wrong number", but `totalNetWorth` and the group subtotals still add
   the raw foreign amount (C4); the map should not claim this until C4 lands.
 - Global history page, net worth timeline, Polish translation/language
-  switch, amortized expenses in history, name suggestions are not listed.
+  switch and transaction-name suggestions are not listed.
 - **Proposed change:** update statuses and add the missing rows; add a
   "Known gaps" pointer to this backlog.
 - **Acceptance:** every ✅/🚧/⬜ row matches the code on `main`; a
