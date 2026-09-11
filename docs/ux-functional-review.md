@@ -39,7 +39,7 @@ Sources: `src/app/layout/shell/shell.ts`, `src/app/features/dashboard/dashboard.
 ### Ergonomic problems
 - **P1 — The dashboard is a placeholder.** The landing page after sign-in is a welcome card with two buttons. The user sees not a single number (envelope balances, this month's spending, net worth, upcoming recurring rules). Every visit needs an extra click and the first screen carries no information.
 - **P2 — No active-item indication in the menu.** The links in `shell.ts` do not use `routerLinkActive`; the user cannot tell which section they are in (especially on sub-pages such as `/budget/history`).
-- **P2 — No household indicator/switcher.** The current household's name appears only in the dashboard heading. A user belonging to several households (possible via invites) has no way to switch context — confirmed as not done in `docs/feature-map.md`. Risk of entering operations into the wrong household without noticing.
+- **P2 — No household indicator/switcher.** The current household's name appears only inside two pages (the dashboard heading and the members page subtitle), never persistently in the application shell. A user belonging to several households (possible via invites) has no way to switch context — confirmed as not done in `docs/feature-map.md`. Risk of entering operations into the wrong household without noticing.
 - **P2 — No global "quick add expense" button.** The most frequent action (recording an expense) requires Dashboard → Budget → "Record transaction". On a phone: hamburger → Budget → scroll → button. A persistent action button (FAB / header item) available on every screen is good practice.
 - **P3 — The language selector is a native `<select>`** with hand-written styling, inconsistent with the rest (spartan). Labels are "PL/EN" instead of "Polski/English". `aria-label="Language"` and `aria-label="Menu"` are not translated.
 - **P3 — No breadcrumbs/page titles.** `document.title` is not set per route (no `title:` in the route definitions) — every browser tab has the same name and browser history is useless.
@@ -71,7 +71,7 @@ Sources: `src/app/features/budget/**`, `src/app/core/budget/budget.service.ts`
 - **P2 — "PLN" is hard-coded in templates** (`{{ ... }} PLN`), even though `budget_transactions` has a `currency` column and the household has a `base_currency`. If someone sets the base currency to EUR, the budget is still in PLN (with the "≈ in base currency" value showing a conversion). Confusing for a non-Polish user and inconsistent with the project's multi-currency assumption.
 - **P3 — Deletion confirmed via `window.confirm`** (rules, transactions, transfers) instead of a spartan dialog; cannot be styled, looks foreign next to the rest of the UI, blocks the whole tab.
 - **P3 — `aria-label="Previous month"` / `"Next month"` are not translated.**
-- **P3 — The empty state (no envelopes)** is text only; there is no "Create your first envelope" button and no starter templates (e.g. Food, Housing, Transport, Entertainment, Savings).
+- **P3 — The empty state (no envelopes)** is text only; the card itself has no contextual "Create your first envelope" button (the user has to find "New envelope" in the action bar above) and there are no starter templates (e.g. Food, Housing, Transport, Entertainment, Savings).
 
 ### Ergonomic problems — forms (transaction, transfer, envelope, rule)
 - **P1 — Forms have no "Cancel"/"Back" button.** The only way out is the browser's back button or the menu. Affects `transaction-form`, `transfer-form`, `envelope-form`, `recurring-rule-form`, `bulk-funding-form`. (Exception: `envelope-delete` has "Cancel".)
@@ -104,7 +104,7 @@ Sources: `src/app/features/net-worth/**`, `src/app/core/net-worth/net-worth.serv
 ### What works well
 - The bulk valuation form (`bulk-valuation-form`) — a table with the previous value, prefill for an already-valued date, existing rows corrected rather than duplicated on save, race protection when changing the date. The best-designed screen in the app.
 - The 12-month timeline (`net-worth-timeline`) with a total and month-over-month change, thoughtful handling of archived accounts.
-- Accounts grouped by type with subtotals, a liquidity filter, a "missing rate" warning instead of a wrong number.
+- Accounts grouped by type with subtotals, a liquidity filter, and on the per-account card a "missing rate" warning instead of a wrong converted number (the aggregates do not share this property — see the P1 below).
 - Value sign consistent with its contribution to net worth (liabilities negative), an overpaid-liability warning without blocking.
 
 ### Ergonomic problems — main screen (`net-worth.ts`)
@@ -140,7 +140,7 @@ Sources: `src/app/features/rates/**`, `src/app/core/rates/**`, migration `202607
 
 ### What works well
 - Fetching rates from frankfurter.dev with one button; rates stored with date and source.
-- The household base currency editable by the owner; a missing rate does not produce a wrong number (`null` + warning).
+- The household base currency editable by the owner; for a single account a missing rate yields `null` plus a warning rather than a wrong converted value (the net worth aggregates still fall back to the raw value — see section 3).
 - Permissions (owner/editor/viewer) correctly reflected in this page's UI.
 
 ### Problems
@@ -162,7 +162,7 @@ Sources: `src/app/features/auth/**`, `src/app/features/household/**`, `src/app/c
 - Guards lead a new user straight to household creation.
 
 ### Problems
-- **P1 — Role permissions are not reflected in the UI outside the rates page and envelope deletion.** A `viewer` sees all the "Record transaction", "New envelope", "Add valuation" buttons, fills in the form and only after saving gets a raw Postgres RLS error ("new row violates row-level security policy"). `currentRole()` is only computed after `loadMembers()`, which only 3 screens call. The role should be loaded once at start-up (e.g. in `householdGuard`) and used to hide/disable write actions.
+- **P1 — Role permissions are not reflected in the UI of the budget and net worth write flows.** Only three screens gate actions by role (the rates page, the household members page and the envelope delete entry point). A `viewer` sees all the "Record transaction", "New envelope", "Add valuation" buttons, fills in the form and only after saving gets a raw Postgres RLS error ("new row violates row-level security policy"). `currentRole()` is only computed after `loadMembers()`, which only 3 screens call. The role should be loaded once at start-up (e.g. in `householdGuard`) and used to hide/disable write actions.
 - **P1 — No password reset** ("Forgot password") and no password/e-mail change after signing in. For an app with real financial data this is blocking — a forgotten password = loss of access.
 - **P2 — No household switcher** (see section 1). `selectHousehold` exists in the service; only the UI is missing. A person invited to a second household is switched into it on acceptance and has no way back to their own.
 - **P2 — The household cannot be renamed**, deleted or left. The owner cannot transfer ownership; there is no UI safeguard against removing/demoting the last owner (SQL may enforce this — I did not verify every policy).
@@ -191,7 +191,7 @@ Sources: `src/app/features/auth/**`, `src/app/features/household/**`, `src/app/c
 
 ### Accessibility
 - **P2 — Untranslated `aria-label`s** ("Previous month", "Next month", "Language", "Menu", "Previous 12 months").
-- **P2 — Validation errors are not linked to the field** (`aria-describedby`/`aria-invalid`), and signal-driven spartan selects are not in the `FormGroup`, so they never get an `invalid` state. The "Choose an envelope" error appears only visually after submit.
+- **P2 — Errors on the signal-driven spartan selects are not linked to the control.** Reactive `hlmInput` controls are wired automatically (`BrnFieldControlDescribedBy` plus the error ID registered by `hlm-field-error`), but the selects (envelope, account, type) are managed by signals outside the `FormGroup`, so they never get an `invalid`/`aria-invalid` state and their `forceShow` error is a purely visual message that appears only after submit.
 - **P2 — Focus after navigation** is not moved to the page heading; after navigating to a form a screen reader stays on the menu button.
 - **P3 — The `‹`/`›` buttons (HTML entities)** as the only content — works with aria-label, but lucide icons would be more readable and consistent with the hamburger.
 - An AXE audit has not been performed (feature map). To be done with the app running.
