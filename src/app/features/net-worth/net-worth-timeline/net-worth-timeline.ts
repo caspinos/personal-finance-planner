@@ -27,6 +27,47 @@ function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
+function endOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+/** `YYYY-MM`, so a column can be compared against a valuation's own month. */
+function monthKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * What one account shows in one month's column, or null for an empty cell.
+ *
+ * An account that wasn't re-valued in a given month still holds whatever it
+ * held, so `get_net_worth_summary` carries its last figure forward -- right for
+ * a live account, wrong for an archived one. Accounts are rarely zeroed out
+ * before being archived, so without this cut-off a closed account's final
+ * balance would be counted in every month from then on, for good.
+ *
+ * The cut-off reads `last_valued_on`, which covers the account's whole history.
+ * Taking it from the rows on screen instead would misjudge any window that ends
+ * before the account's final valuation: every row there carries some earlier
+ * valuation forward, which would look like the account had ended back then.
+ */
+export function timelineCellValue(
+  row: NetWorthSummaryRow | undefined,
+  column: Date,
+  archived: boolean,
+): number | null {
+  if (!row || row.valuation_id === null) {
+    return null;
+  }
+
+  if (archived) {
+    if (row.last_valued_on === null || monthKey(column) > row.last_valued_on.slice(0, 7)) {
+      return null;
+    }
+  }
+
+  return row.value_in_base ?? row.value;
+}
+
 @Component({
   selector: 'app-net-worth-timeline',
   imports: [
@@ -201,7 +242,24 @@ export class NetWorthTimeline {
   protected readonly windowEnd = signal(startOfMonth(new Date()));
   protected readonly monthlyRows = signal<NetWorthSummaryRow[][]>([]);
 
-  protected readonly accounts = this.netWorth.activeAccounts;
+  /**
+   * Active accounts always get a row. An archived one does too, but only for
+   * windows where it actually held something: archiving says "this is done
+   * with", not "this never happened", so its balances still belong to the
+   * months it was live -- and to those months' totals. Past its lifetime
+   * `cellValue` blanks every cell, so the row drops out of later windows.
+   */
+  protected readonly accounts = computed(() => {
+    const monthCount = this.months().length;
+    const heldSomethingInWindow = (accountId: string) =>
+      Array.from({ length: monthCount }, (_, index) => this.cellValue(accountId, index)).some(
+        (value) => value !== null && value !== 0,
+      );
+
+    return this.netWorth
+      .accounts()
+      .filter((account) => !account.archived || heldSomethingInWindow(account.id));
+  });
   protected readonly baseCurrency = computed(
     () => this.households.currentHousehold()?.base_currency ?? 'PLN',
   );
@@ -211,9 +269,28 @@ export class NetWorthTimeline {
     return Array.from({ length: WINDOW_SIZE }, (_, i) => addMonths(end, i - (WINDOW_SIZE - 1)));
   });
 
+  /**
+   * A column headed "Jul 26" means "where things stood at the end of July", so
+   * each column is queried as of the month's last day. Querying the first day
+   * instead would show the previous month's closing balances under this
+   * month's heading, and hide anything recorded during the month itself.
+   */
+  private readonly monthEnds = computed(() => this.months().map(endOfMonth));
+
   private readonly monthMaps = computed(() =>
     this.monthlyRows().map((rows) => new Map(rows.map((row) => [row.account_id, row]))),
   );
+
+  private readonly archivedAccountIds = computed(
+    () =>
+      new Set(
+        this.netWorth
+          .accounts()
+          .filter((account) => account.archived)
+          .map((account) => account.id),
+      ),
+  );
+
 
   protected readonly groupedAccounts = computed(() => {
     const groups = new Map<AssetAccountType, AssetAccount[]>();
@@ -243,11 +320,11 @@ export class NetWorthTimeline {
   }
 
   protected cellValue(accountId: string, monthIndex: number): number | null {
-    const row = this.monthMaps()[monthIndex]?.get(accountId);
-    if (!row || row.valuation_id === null) {
-      return null;
-    }
-    return row.value_in_base ?? row.value;
+    return timelineCellValue(
+      this.monthMaps()[monthIndex]?.get(accountId),
+      this.months()[monthIndex],
+      this.archivedAccountIds().has(accountId),
+    );
   }
 
   protected monthLabel(month: Date): string {
@@ -296,7 +373,7 @@ export class NetWorthTimeline {
   }
 
   private async loadTimeline(): Promise<void> {
-    const rows = await this.netWorth.loadTimeline(this.months());
+    const rows = await this.netWorth.loadTimeline(this.monthEnds());
     this.monthlyRows.set(rows);
   }
 

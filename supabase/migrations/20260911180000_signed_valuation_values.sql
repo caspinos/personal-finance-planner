@@ -10,7 +10,7 @@
 -- worth: a debt of 100 is -100, an overpayment on that debt is +100, and an
 -- overdrawn account is negative. Nothing flips the sign afterwards, which also
 -- makes `signed_value`/`signed_value_in_base` redundant -- the summary drops
--- them and callers read `value`/`value_in_base` instead.
+-- them and callers read `value`/`value_in_base`.
 
 -- 1. Allow negative valuations ------------------------------------------------
 
@@ -47,10 +47,17 @@ where aa.id = av.asset_account_id
   and av.value <> 0;
 
 -- 3. Stop flipping the sign in the summary ------------------------------------
+--
+-- Otherwise unchanged from 20260911170000_net_worth_summary_last_valued_on.sql:
+-- p_include_archived and last_valued_on keep working exactly as they do there.
 
-drop function if exists public.get_net_worth_summary(uuid, date);
+drop function if exists public.get_net_worth_summary(uuid, date, boolean);
 
-create function public.get_net_worth_summary(p_household_id uuid, p_as_of date)
+create function public.get_net_worth_summary(
+  p_household_id uuid,
+  p_as_of date,
+  p_include_archived boolean default false
+)
 returns table (
   account_id uuid,
   account_name text,
@@ -60,6 +67,7 @@ returns table (
   currency text,
   valuation_id uuid,
   valued_on date,
+  last_valued_on date,
   value numeric,
   value_in_base numeric
 )
@@ -80,6 +88,11 @@ as $$
     coalesce(latest.currency, aa.currency) as currency,
     latest.id as valuation_id,
     latest.valued_on,
+    (
+      select max(av.valued_on)
+      from public.asset_valuations av
+      where av.asset_account_id = aa.id
+    ) as last_valued_on,
     coalesce(latest.value, 0) as value,
     case
       when coalesce(latest.currency, aa.currency) = base.base_currency then coalesce(latest.value, 0)
@@ -99,8 +112,8 @@ as $$
     limit 1
   ) latest on true
   where aa.household_id = p_household_id
-    and aa.archived = false
+    and (p_include_archived or aa.archived = false)
   order by aa.created_at asc;
 $$;
 
-grant execute on function public.get_net_worth_summary(uuid, date) to authenticated;
+grant execute on function public.get_net_worth_summary(uuid, date, boolean) to authenticated;

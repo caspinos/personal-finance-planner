@@ -53,6 +53,36 @@ export async function addValuationFromAccountCard(
   await expect(page).toHaveURL(/\/net-worth\/accounts\/.+/);
 }
 
+/**
+ * Fills the bulk valuation grid from the net worth page and saves it, landing
+ * back on the net worth page. Accounts left out of `entries` stay untouched.
+ */
+export async function recordBulkValuations(
+  page: Page,
+  entries: Array<{ account: string; currency?: string; value: string; flows?: string }>
+): Promise<void> {
+  await page.getByRole('link', { name: 'Update all valuations' }).click();
+  await expect(page).toHaveURL('/net-worth/valuations/bulk');
+
+  for (const entry of entries) {
+    const currency = entry.currency ?? 'PLN';
+    await page
+      .getByRole('spinbutton', { name: `Value for ${entry.account} (${currency})` })
+      .fill(entry.value);
+
+    if (entry.flows) {
+      await page
+        .getByRole('spinbutton', {
+          name: new RegExp(`^Flows for ${entry.account} \\(${currency}\\)`),
+        })
+        .fill(entry.flows);
+    }
+  }
+
+  await page.getByRole('button', { name: 'Save valuations' }).click();
+  await expect(page).toHaveURL('/net-worth');
+}
+
 /** Asserts the displayed value for a given account's card on the net worth page. */
 export async function expectAccountValue(
   page: Page,

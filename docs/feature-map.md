@@ -122,6 +122,17 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 - ✅ Editing/deleting individual valuations and archiving/unarchiving
   accounts from the UI (per-account history page with valuation list,
   edit/delete actions, and an archive toggle)
+- ✅ Bulk valuation form (`/net-worth/valuations/bulk`, "Update all
+  valuations" on the net worth page): one date plus a value and a flows
+  (`contribution_amount`) column for every active account, so a whole
+  monthly snapshot is entered in one place. Rows are grouped by account
+  type and show the last value before the chosen date for reference;
+  blank rows are skipped. Saving is a single upsert keyed on the existing
+  account + date uniqueness constraint, so reopening the form for a date
+  that was already valued prefills it and corrects the stored rows rather
+  than failing (`NetWorthService.recordValuations`/`loadValuationsOn`, no
+  migration needed). Like the single-valuation form, the grid takes negative
+  values and warns — without blocking — when a liability row is positive
 - ✅ `asset_transactions` for buy/sell events on investment accounts, via a
   new `asset_holdings` (per-instrument, e.g. a stock/ETF/fund) +
   `asset_transactions` (buy/sell events) schema, additive to whole-account
@@ -134,10 +145,12 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   dedicated holding history page listing all buy/sell transactions with
   edit/delete, and forms to record/edit transactions
 - ✅ End-to-end (Playwright) coverage for the net worth flow: account
-  creation, recording/editing/deleting valuations, liability sign handling
-  (including an overdrawn account and the warning on an overpaid liability),
-  account archiving/unarchiving, and holding buy/sell transactions with
-  position calculations (`e2e/net-worth.spec.ts`)
+  creation, recording/editing/deleting valuations, bulk valuation entry
+  (including prefill/overwrite for an already-valued date and skipping
+  blank rows), liability sign handling (including an overdrawn account and
+  the warning on an overpaid liability), account archiving/unarchiving, and
+  holding buy/sell transactions with position calculations
+  (`e2e/net-worth.spec.ts`)
 
 
 ## 4. Multi-currency & rates — Stage 3/4
@@ -196,9 +209,9 @@ All ⬜ not started:
   `npx supabase start` first). Not yet wired into CI (needs a Docker-capable
   runner for the local Supabase stack).
 - ✅ E2E test coverage for the net worth flow (Playwright): account
-  creation, recording/editing/deleting valuations, liability sign handling,
-  and account archiving/unarchiving (`e2e/net-worth.spec.ts`, same
-  requirements as above).
+  creation, recording/editing/deleting valuations, bulk valuation entry,
+  liability sign handling, and account archiving/unarchiving
+  (`e2e/net-worth.spec.ts`, same requirements as above).
 - ✅ E2E test coverage for household invites (Playwright): inviting a member
   with a role, accepting via the generated link as a brand-new user, owner
   role changes/removal, and revoking a pending invite (`e2e/household.spec.ts`,

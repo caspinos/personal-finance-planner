@@ -143,6 +143,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'net-worth/valuations/bulk',
+        loadComponent: () =>
+          import('./features/net-worth/bulk-valuation-form/bulk-valuation-form').then(
+            (m) => m.BulkValuationForm,
+          ),
+      },
+      {
         path: 'net-worth/valuations/new',
         loadComponent: () =>
           import('./features/net-worth/valuation-form/valuation-form').then(
