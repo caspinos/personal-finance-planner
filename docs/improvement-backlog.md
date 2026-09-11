@@ -7,7 +7,8 @@ up independently by other coding agents.
 How to use this file:
 
 - Each item has an **ID**, a **priority** (P0 = bug / data-integrity or
-  security, P1 = important, P2 = nice-to-have), an **effort** estimate
+  security, P1 = important, P2 = nice-to-have, P3 = later / after the
+  roadmap items above it), an **effort** estimate
   (S / M / L), the **files** involved, the **problem**, and a **proposed
   change** plus **acceptance criteria**. Items are written so that an agent can
   take one without reading the others.
@@ -83,10 +84,12 @@ reviewed.
 - **Files:** `supabase/config.toml`
 - **Problem:** `[auth] site_url = "http://127.0.0.1:3000"` while the app runs
   on `http://localhost:4200`; any auth email link (confirmation, password
-  reset) generated locally points to the wrong origin. `minimum_password_length
-  = 6` locally is weaker than what the Register page enforces (verify).
+  reset) generated locally points to the wrong origin. (The local
+  `minimum_password_length = 6` already matches the Register page's
+  `Validators.minLength(6)`; verify the production project's password policy
+  separately.)
 - **Proposed change:** set `site_url`/`additional_redirect_urls` to
-  `http://localhost:4200`, align password length with the UI validator.
+  `http://localhost:4200`.
 - **Acceptance:** local password-reset flow (once implemented, see C-items)
   lands on the app.
 
@@ -103,11 +106,12 @@ reviewed.
 ### A7. Unit-test coverage is almost nonexistent (P1, M) 🔍
 - **Files:** `src/**/*.spec.ts` (only `app.spec.ts` and
   `net-worth-timeline.spec.ts` exist)
-- **Problem:** All business logic in `BudgetService`, `NetWorthService`,
-  `RatesService`, `HouseholdService`, form components and pure helpers is only
-  covered by Playwright e2e, which needs Docker + Supabase and is slow. Pure
-  functions (amortization slices, month math, balance grouping, timeline
-  derivation) are cheap to unit-test.
+- **Problem:** Apart from `timelineCellValue` (covered by
+  `net-worth-timeline.spec.ts`), the business logic in `BudgetService`,
+  `NetWorthService`, `RatesService`, `HouseholdService`, form components and
+  pure helpers is only covered by Playwright e2e, which needs Docker +
+  Supabase and is slow. Pure functions (amortization slices, month math,
+  balance grouping) are cheap to unit-test.
 - **Proposed change:** extract pure helpers out of services/components into
   `*.utils.ts` files and add Vitest specs; add a Supabase client mock for
   service-level tests (see each area's items for concrete targets).
@@ -137,8 +141,11 @@ reviewed.
   `exchange_rates(household_id, currency, rate_date desc)` (unique already
   covers this order - verify), `household_invites(household_id)`,
   `household_invites(lower(email)) where accepted_at is null and revoked_at is null`.
-- **Acceptance:** `explain analyze` of the four RPCs uses index scans on a
-  seeded dataset; migration applies cleanly with `npx supabase db reset`.
+- **Acceptance:** `EXPLAIN (ANALYZE, BUFFERS)` of the four RPCs on a
+  representative large seeded dataset (thousands of transactions/valuations)
+  shows lower cost and execution time than before, with the new indexes used
+  where the planner finds them cheaper (a small dataset may legitimately keep
+  seq scans); migration applies cleanly with `npx supabase db reset`.
 
 ### B2. Generated recurring transactions are not linked to their rule (P1, M) 🔍
 - **Files:** `supabase/migrations/20260705020000_recurring_envelope_rules.sql`,
@@ -146,17 +153,19 @@ reviewed.
   (`process_due_recurring_rules`), `src/app/core/budget/budget.service.ts`
 - **Problem:** `process_due_recurring_rules` inserts plain
   `budget_transactions` rows with no reference to the rule. Consequences: a
-  generated row is indistinguishable from a manual one in history; deleting or
-  pausing a rule cannot clean up / rewind; re-creating a rule with an old
-  `next_run_on` duplicates months; there is no idempotency key, so two
-  concurrent clients could in theory double-insert (the `FOR UPDATE` lock
-  makes this unlikely, but a crash between the loop and the final `update`
-  does not roll anything back only because it's one transaction - verify).
+  generated row is indistinguishable from a manual one in history; deleting a
+  rule cannot clean up its generated rows; pausing a rule for several months
+  and resuming it backfills every missed month at once (see B3) with no way
+  to tell which rows came from the rule; and there is no idempotency key, so
+  any future second trigger path (pg_cron, B3) would need one. The current
+  function itself is safe against concurrent callers (`FOR UPDATE` serialises
+  them) and against partial failure (one transaction).
 - **Proposed change:** add `recurring_rule_id uuid references
-  recurring_envelope_rules(id) on delete set null` and a unique index
+  recurring_envelope_rules(id) on delete restrict` and a unique index
   `(recurring_rule_id, occurred_on)`; insert `on conflict do nothing`. Surface
-  the origin in the history views (badge "recurring") and offer "delete
-  future/all generated" when deleting a rule.
+  the origin in the history views (badge "recurring"). When a rule is deleted,
+  either delete its generated rows first (user's choice: "delete future/all
+  generated") or soft-delete the rule (`deleted_at`) so provenance survives.
 - **Acceptance:** re-running the RPC never duplicates; history shows the rule
   origin; e2e for delete-rule behaviour.
 
@@ -241,9 +250,13 @@ reviewed.
   update base currency). `accept_household_invite` `on conflict ... set role`
   can also demote an existing owner if an invite for their e-mail is accepted.
 - **Proposed change:** a trigger on `household_members` (`before update or
-  delete`) raising when the row is the last `owner`; make
-  `accept_household_invite` never lower an existing role (or skip the
-  conflict). Reflect in UI (disable the action for the last owner).
+  delete`) raising when the row is the last `owner`, with an explicit
+  exception for the household-delete cascade (skip the check when the parent
+  `households` row no longer exists, i.e. `not exists (select 1 from
+  households where id = old.household_id)`, which is the case inside an
+  `on delete cascade`); make `accept_household_invite` never lower an existing
+  role (or skip the conflict). Reflect in UI (disable the action for the last
+  owner).
 - **Acceptance:** SQL test / e2e: demoting the last owner fails with a clear
   message.
 
@@ -361,7 +374,9 @@ reviewed.
 - **Files:** `budget.service.ts`, `net-worth.service.ts`, `rates.service.ts`,
   `frankfurter.service.ts`, `household.service.ts`
 - **Problem:** `toDateOnly` is copy-pasted 4 times; the two `require*` guards
-  3 times; error strings are English literals not going through Transloco.
+  4 times (`HouseholdService`, `BudgetService`, `NetWorthService`,
+  `RatesService`); error strings are English literals not going through
+  Transloco.
 - **Proposed change:** `src/app/core/util/date.ts` (`toDateOnly`,
   `startOfMonth`, `addMonths`, `parseDateOnly`) with unit tests; a small
   `HouseholdContext` helper (or base class) exposing `requireHouseholdId()`;
@@ -384,8 +399,10 @@ reviewed.
 ### C5. Timeline fires one RPC per month (P1, M) 🔍
 - **Files:** `NetWorthService.loadTimeline`, `net-worth-timeline.ts`,
   `get_net_worth_summary`
-- **Problem:** A 24-month timeline issues 24 parallel `rpc` calls, each
-  running the full summary with correlated subqueries and rate lookups.
+- **Problem:** The timeline window is 12 months (`WINDOW_SIZE = 12`) and
+  issues 12 parallel `rpc` calls per window, each running the full summary
+  with correlated subqueries and rate lookups; the bulk valuation form calls
+  the same path for its "previous value" column.
 - **Proposed change:** add `get_net_worth_timeline(p_household_id, p_from,
   p_to)` returning `(month, account_id, value, value_in_base, ...)` in one
   set-returning query (generate_series over months + lateral latest
@@ -478,11 +495,14 @@ reviewed.
   and is untestable. See also A6.
 - **Proposed change:** a tiny `StorageService` with try/catch and typed keys
   used by all three call sites.
+- **Acceptance:** unit test with a throwing `localStorage` stub proves the
+  services still construct with defaults; no direct `localStorage` access
+  outside the storage service.
 
 
 ## D. Feature UI (`src/app/features`, `src/app/layout`)
 
-### D1. Seven forms parse the date input with `new Date('YYYY-MM-DD')` (UTC) - off-by-one-day bug (P0, S) 🔍
+### D1. Seven call sites in six forms parse the date input with `new Date('YYYY-MM-DD')` (UTC) - off-by-one-day bug (P0, S) 🔍
 - **Files:** `budget/transfer-form/transfer-form.ts:207`,
   `budget/bulk-funding-form/bulk-funding-form.ts:364`,
   `net-worth/valuation-form/valuation-form.ts:231`,
@@ -628,8 +648,9 @@ reviewed.
 ### D11. Form UX consistency (P2, M) 🔍
 - **Files:** all `*-form.ts`
 - **Problem:** Forms render inside the shell with `min-h-svh` centering, so
-  each form page scrolls past the header; none has a Cancel/Back link except
-  `envelope-delete`; numeric fields start at `0` instead of empty
+  each form page scrolls past the header; most forms have no Cancel/Back
+  link (`envelope-delete` and `bulk-valuation-form` are the exceptions);
+  numeric fields start at `0` instead of empty
   (`amount: [0]`), so the user must clear the field; after saving from an
   envelope's history the app navigates to `/budget` (context lost); no
   `autofocus`; `hlm-select` placeholder duplicates the label.
@@ -720,6 +741,8 @@ reviewed.
   expenses by envelope (bar/pie), income vs. expense over time, net worth by
   type over time (stacked), all computed by SQL RPCs to keep the "derived,
   never stored" principle. Consider `@angular/cdk` table for sortable tables.
+- **Acceptance:** feature map section 5 rows become ✅; each chart has an
+  accessible table fallback; e2e smoke test per report.
 
 ### D19. Data export (P1, M) 🔍
 - **Files:** new `features/settings/export`, new RPC or client-side
@@ -740,6 +763,9 @@ reviewed.
 - **Proposed change:** `npx ng build --stats-json` + bundle analyzer; lazy
   load the Supabase client until after the auth route resolves if feasible;
   align `@angular/cdk` to `^22`; raise the budget deliberately if justified.
+- **Acceptance:** production build stays under the warning budget after the
+  dashboard (D17) lands, or the budget is raised with a written rationale in
+  `angular.json`.
 
 ## E. Tests
 
@@ -776,6 +802,8 @@ reviewed.
   guard (B9), `get_envelope_balances` with amortization + transfers,
   `get_holding_positions` buy/sell math, `process_due_recurring_rules`
   idempotency (B2), `delete_envelope_with_transfer` collapse of transfers.
+- **Acceptance:** `supabase test db` runs in CI and fails on a deliberately
+  broken policy.
 
 ### E4. CI improvements (P2, S) 🔍
 - Cache Playwright browsers and the Supabase Docker images; run unit tests
@@ -784,6 +812,8 @@ reviewed.
   `supabase db lint` / migration dry-run job so a broken migration fails
   before merge (the AGENTS.md deploy note about app/db skew makes this
   valuable).
+- **Acceptance:** CI wall time for the e2e job drops measurably on a cache
+  hit; a PR with a syntactically broken migration fails before merge.
 
 ## F. Documentation
 
@@ -798,25 +828,40 @@ reviewed.
   switch, amortized expenses in history, name suggestions are not listed.
 - **Proposed change:** update statuses and add the missing rows; add a
   "Known gaps" pointer to this backlog.
+- **Acceptance:** every ✅/🚧/⬜ row matches the code on `main`; a
+  reviewer can find each shipped feature in the map.
 
 ### F2. `README.md` / `AGENTS.md` drift (P2, S) 🔍
 - README says "rate storage/conversion UI is still on the roadmap" and
-  "household invites ... not yet built" - both exist. README lists spartan
-  components installed as `button, input, ...` but `select`, `toggle`,
-  `toggle-group` are also present (AGENTS.md too). AGENTS.md references
-  `docs/zalozenia-i-plan.md` which no longer exists in the repo.
-- **Proposed change:** refresh both; document the Node version policy (A2),
-  how to run e2e locally including the `pfp.lang` trick, and the date/
-  timezone rule (D1).
+  "household invites ... not yet built" - both exist. AGENTS.md lists the
+  installed spartan components as `button, input, label, field, card, alert,
+  spinner, separator, utils` but `select`, `toggle` and `toggle-group` are
+  also installed. AGENTS.md (line 14) and
+  `docs/project-assumptions-and-plan.md` (line 3) both link to
+  `docs/zalozenia-i-plan.md`, which no longer exists in the repo.
+- **Proposed change:** refresh README, AGENTS.md and the plan document's
+  header; document the Node version policy (A2), how to run e2e locally
+  including the `pfp.lang` trick, and the date/timezone rule (D1).
+- **Acceptance:** no dead relative links in `docs/`, README or AGENTS.md
+  (a link checker in CI is optional); component list matches
+  `src/app/ui/`.
 
 ### F3. Decision log for domain rules (P2, S) 🔍
-- Rules that exist only in code comments or migration headers: valuation sign
-  convention, budget is PLN-only, PLN as rate pivot, average-cost (not FIFO)
-  holdings, amortization invariants, recurring-rule day clamp (1-28),
-  contribution sign (B13). Collect them in
-  `docs/domain-rules.md` so agents do not re-derive or contradict them.
+- Domain rules are scattered across `docs/feature-map.md` entries, migration
+  headers and code comments: valuation sign convention, budget is PLN-only,
+  PLN as rate pivot, average-cost (not FIFO) holdings, amortization
+  invariants, recurring-rule day clamp (1-28), contribution sign (B13, not
+  documented anywhere yet). Collect them in `docs/domain-rules.md` so agents
+  do not re-derive or contradict them, and link it from AGENTS.md.
+- **Acceptance:** each rule above has one canonical paragraph in
+  `docs/domain-rules.md`; feature-map entries link to it instead of
+  restating it.
 
 ## G. Larger product gaps (from the roadmap, not yet started)
+
+These are summary rows, not ready-to-pick tasks: an agent taking one should
+first split it into detailed items (with acceptance criteria) in the section
+it belongs to.
 
 | Item | Priority | Effort | Notes |
 | --- | --- | --- | --- |
