@@ -317,6 +317,71 @@ export class NetWorthService {
     return data;
   }
 
+  /**
+   * Records valuations for several accounts sharing one date in a single round
+   * trip. Rows already stored for an account on that date are overwritten (the
+   * table has a unique constraint on account + date), so the bulk form can be
+   * reopened for a date that was only partly filled in.
+   */
+  async recordValuations(input: {
+    valuedOn: Date;
+    entries: Array<{
+      accountId: string;
+      value: number;
+      currency: string;
+      contributionAmount?: number;
+      note?: string;
+    }>;
+  }): Promise<AssetValuation[]> {
+    const householdId = this.requireHouseholdId();
+    const userId = this.requireUserId();
+    const valuedOn = toDateOnly(input.valuedOn);
+
+    if (input.entries.length === 0) {
+      return [];
+    }
+
+    const { data, error } = await this.supabase
+      .from('asset_valuations')
+      .upsert(
+        input.entries.map((entry) => ({
+          household_id: householdId,
+          asset_account_id: entry.accountId,
+          valued_on: valuedOn,
+          value: entry.value,
+          currency: entry.currency,
+          contribution_amount: entry.contributionAmount ?? 0,
+          note: entry.note || null,
+          created_by: userId,
+        })),
+        { onConflict: 'asset_account_id,valued_on' },
+      )
+      .select();
+
+    if (error) {
+      throw error;
+    }
+
+    return data ?? [];
+  }
+
+  /** Loads every valuation recorded across the household on one given date. */
+  async loadValuationsOn(valuedOn: Date): Promise<AssetValuation[]> {
+    const householdId = this.requireHouseholdId();
+
+    const { data, error } = await this.supabase
+      .from('asset_valuations')
+      .select('*')
+      .eq('household_id', householdId)
+      .eq('valued_on', toDateOnly(valuedOn));
+
+    if (error) {
+      throw error;
+    }
+
+    return data ?? [];
+  }
+
   async loadValuation(valuationId: string): Promise<AssetValuation> {
     const householdId = this.requireHouseholdId();
 
