@@ -80,12 +80,12 @@ Sources: `src/app/features/budget/**`, `src/app/core/budget/budget.service.ts`
 - **P2 — Field order in the transaction form is sub-optimal.** "Name" (which auto-selects the envelope based on history) is the last field. The natural flow: Name → (auto) Envelope → Amount → Date. The amount field defaults to `0` — the user has to delete it before typing; better an empty field with a `0.00` placeholder.
 - **P2 — The "Expense/Income" type is a toggle group outside the reactive form** — fine, but in the transfer form and elsewhere select validation appears only after `submit`; the "missing envelope" message is not linked to the control via `aria-describedby`.
 - **P2 — Forms are vertically centred in a `min-h-svh` container** *inside* the shell, which already has a header. Result: the page is taller than the viewport (header + 100svh), a needless scrollbar appears, and on desktop the form "floats" in the middle of an empty screen far from the menu. The container should be a normal block at the top of the page (like the lists).
-- **P2 — Name suggestions use a native `<datalist>`.** Behaves unevenly across browsers (Safari iOS ignores it, Firefox shows it only after typing), does not show the envelope/amount next to the suggestion, and the cap of the 200 most recent rows without per-envelope deduplication is arbitrary. Better: a custom combobox (spartan `command`/`combobox`) with the last amount and envelope in the suggestion.
+- **P2 — Name suggestions use a native `<datalist>`.** Its presentation and accessibility are browser-dependent (the dropdown looks and behaves differently in Chrome, Firefox and iOS Safari, and appears only after typing in some of them), it does not show the envelope/amount next to the suggestion, and the cap of the 200 most recent rows without per-envelope deduplication is arbitrary. Better: a custom combobox (spartan `command`/`combobox`) with the last amount and envelope in the suggestion.
 - **P2 — No categories/tags and no note on a transaction.** There is only `name`. You cannot record e.g. "Biedronka — barbecue shopping" with a tag, or attach a receipt. Per-category reports (plan Stage 4) have nothing to work on, because category = envelope.
 - **P2 — No indication of who recorded an operation** (`created_by` is in the database, not shown) — when sharing with household members this matters ("who spent 300 zł from Entertainment?").
 - **P2 — Recurring rules are monthly only (day 1–28).** No weekly, quarterly, yearly (insurance, tax), no end date and no start date (starts from the "next occurrence"). No preview "X rules totalling Y will run this month".
 - **P2 — Bulk funding does not remember previous amounts.** Amounts have to be typed from scratch every month; no "repeat last month's funding" and no default amount per envelope (envelope target/limit).
-- **P2 — Bulk funding saves entries sequentially, non-atomically** (a `recordTransaction` loop in `bulk-funding-form`). On an error midway some envelopes are funded and some are not; the message only reports the number saved. It should go through a single RPC/transaction like `recordValuations` in net worth.
+- **P2 — Bulk funding saves entries sequentially, non-atomically** (a `recordTransaction` loop in `bulk-funding-form`). On an error midway some envelopes are funded and some are not; the message only reports the number saved. It should go through a single RPC/transaction (the same applies to `recordValuations` in net worth, which also issues several requests and can partially save).
 - **P3 — Inconsistent date parsing:** `transaction-form` uses the safe `fromDateInputValue`, while `transfer-form` and `bulk-funding-form` use `new Date(occurredOn)` (UTC). In negative-offset time zones the date shifts by a day. Harmless in Poland, but a time bomb for multi-currency / household members abroad.
 - **P3 — Amount inputs are `type="number"`** without `inputmode="decimal"` and without handling a decimal comma on a Polish keyboard (on Android the numeric keyboard sometimes lacks a dot). Consider a custom amount field accepting "12,50".
 
@@ -102,7 +102,7 @@ Sources: `src/app/features/budget/**`, `src/app/core/budget/budget.service.ts`
 Sources: `src/app/features/net-worth/**`, `src/app/core/net-worth/net-worth.service.ts`, migrations `*net_worth*`, `*asset_holdings*`, `*signed_valuation_values*`
 
 ### What works well
-- The bulk valuation form (`bulk-valuation-form`) — a table with the previous value, prefill for an already-valued date, a single upsert on save, race protection when changing the date. The best-designed screen in the app.
+- The bulk valuation form (`bulk-valuation-form`) — a table with the previous value, prefill for an already-valued date, existing rows corrected rather than duplicated on save, race protection when changing the date. The best-designed screen in the app.
 - The 12-month timeline (`net-worth-timeline`) with a total and month-over-month change, thoughtful handling of archived accounts.
 - Accounts grouped by type with subtotals, a liquidity filter, a "missing rate" warning instead of a wrong number.
 - Value sign consistent with its contribution to net worth (liabilities negative), an overpaid-liability warning without blocking.
@@ -170,7 +170,7 @@ Sources: `src/app/features/auth/**`, `src/app/features/household/**`, `src/app/c
 - **P2 — Public registration is open** (noted in the feature map as to-do). For a household tool with a public production address this is a risk (spam accounts). Consider registration only via an invite link or an allow-list of e-mails.
 - **P2 — The sign-in/registration screens have no language switcher** and default to Polish (`defaultLang: 'pl'` from localStorage) with no way to change it before signing in; `<html lang="en">` is fixed and does not follow the language (screen readers read Polish text with an English voice).
 - **P2 — The password field has no "show password" toggle** and no requirements hint (the 6-character minimum is only learned from the error message).
-- **P3 — After registration with e-mail confirmation enabled** the user sees only a "check your inbox" message, without a "resend" button or a sign-in link that keeps `returnUrl`.
+- **P3 — After registration with e-mail confirmation enabled** the user sees only a "check your inbox" message with no "resend confirmation" action (the sign-in link with `returnUrl` is present in the card footer).
 - **P3 — Invites are not e-mailed** (no SMTP) — documented. At least a "Share" button (Web Share API) on the phone would help.
 - **P3 — Onboarding ends at the household name.** After creation the user lands on an empty dashboard and has to discover on their own that envelopes must be created. A wizard (name → base currency → starter envelope set → first funding) would shorten time to first value.
 
@@ -204,7 +204,7 @@ Sources: `src/app/features/auth/**`, `src/app/features/household/**`, `src/app/c
 
 ### Mobile / PWA
 - The responsive layout is correct (1/2/3-column grid, hamburger), but:
-- **P2 — No PWA** (manifest, icon, service worker) — plan post-MVP; the app cannot be "installed" on a phone, and that is the main scenario for entering expenses on the go.
+- **P2 — No PWA** (manifest, icon, service worker) — plan post-MVP. Browsers still allow adding the site to the home screen, but without a manifest there is no install prompt, no standalone window, no proper icon/splash and no offline shell — and the phone is the main scenario for entering expenses on the go.
 - **P2 — No offline mode / write queue** — in a shop without coverage the save fails and the user has to remember to re-enter it.
 - **P3 — Tall cards with footer buttons** require a lot of scrolling on a phone; a compact list (one line = envelope + balance) would work better on a small screen.
 
