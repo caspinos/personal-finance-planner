@@ -45,19 +45,22 @@ function monthKey(date: Date): string {
  * before being archived, so without this cut-off a closed account's final
  * balance would be counted in every month from then on, for good.
  *
- * `lastValuedMonth` is `YYYY-MM` of the newest valuation known for the account.
+ * The cut-off reads `last_valued_on`, which covers the account's whole history.
+ * Taking it from the rows on screen instead would misjudge any window that ends
+ * before the account's final valuation: every row there carries some earlier
+ * valuation forward, which would look like the account had ended back then.
  */
 export function timelineCellValue(
   row: NetWorthSummaryRow | undefined,
   column: Date,
-  account: { archived: boolean; lastValuedMonth: string | undefined },
+  archived: boolean,
 ): number | null {
   if (!row || row.valuation_id === null) {
     return null;
   }
 
-  if (account.archived) {
-    if (account.lastValuedMonth === undefined || monthKey(column) > account.lastValuedMonth) {
+  if (archived) {
+    if (row.last_valued_on === null || monthKey(column) > row.last_valued_on.slice(0, 7)) {
       return null;
     }
   }
@@ -288,24 +291,6 @@ export class NetWorthTimeline {
       ),
   );
 
-  /**
-   * The last month each account was actually valued in, as far as this window
-   * can see. The summary carries the newest valuation at or before a column
-   * forward, so the latest column's row already names that valuation's date.
-   */
-  private readonly lastValuedMonth = computed(() => {
-    const lastValued = new Map<string, string>();
-
-    for (const month of this.monthMaps()) {
-      for (const [accountId, row] of month) {
-        if (row.valued_on !== null) {
-          lastValued.set(accountId, row.valued_on.slice(0, 7));
-        }
-      }
-    }
-
-    return lastValued;
-  });
 
   protected readonly groupedAccounts = computed(() => {
     const groups = new Map<AssetAccountType, AssetAccount[]>();
@@ -335,10 +320,11 @@ export class NetWorthTimeline {
   }
 
   protected cellValue(accountId: string, monthIndex: number): number | null {
-    return timelineCellValue(this.monthMaps()[monthIndex]?.get(accountId), this.months()[monthIndex], {
-      archived: this.archivedAccountIds().has(accountId),
-      lastValuedMonth: this.lastValuedMonth().get(accountId),
-    });
+    return timelineCellValue(
+      this.monthMaps()[monthIndex]?.get(accountId),
+      this.months()[monthIndex],
+      this.archivedAccountIds().has(accountId),
+    );
   }
 
   protected monthLabel(month: Date): string {

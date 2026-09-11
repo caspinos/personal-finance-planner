@@ -11,6 +11,7 @@ function row(overrides: Partial<NetWorthSummaryRow> = {}): NetWorthSummaryRow {
     currency: 'PLN',
     valuation_id: 'valuation-1',
     valued_on: '2026-05-31',
+    last_valued_on: '2026-05-31',
     value: 5000,
     signed_value: 5000,
     value_in_base: null,
@@ -22,93 +23,66 @@ function row(overrides: Partial<NetWorthSummaryRow> = {}): NetWorthSummaryRow {
 describe('timelineCellValue', () => {
   it('is empty when no valuation exists at or before the column', () => {
     expect(
-      timelineCellValue(row({ valuation_id: null, valued_on: null }), new Date(2026, 4, 1), {
-        archived: false,
-        lastValuedMonth: undefined,
-      }),
+      timelineCellValue(
+        row({ valuation_id: null, valued_on: null, last_valued_on: null }),
+        new Date(2026, 4, 1),
+        false,
+      ),
     ).toBeNull();
 
-    expect(
-      timelineCellValue(undefined, new Date(2026, 4, 1), {
-        archived: false,
-        lastValuedMonth: undefined,
-      }),
-    ).toBeNull();
+    expect(timelineCellValue(undefined, new Date(2026, 4, 1), false)).toBeNull();
   });
 
   it('carries a live account forward into months it was not re-valued in', () => {
-    const august = timelineCellValue(row(), new Date(2026, 7, 1), {
-      archived: false,
-      lastValuedMonth: '2026-05',
-    });
-
-    expect(august).toBe(5000);
+    expect(timelineCellValue(row(), new Date(2026, 7, 1), false)).toBe(5000);
   });
 
   it('prefers the base-currency figure when one is available', () => {
-    const value = timelineCellValue(row({ signed_value_in_base: 4800 }), new Date(2026, 4, 1), {
-      archived: false,
-      lastValuedMonth: '2026-05',
-    });
-
-    expect(value).toBe(4800);
+    expect(
+      timelineCellValue(row({ signed_value_in_base: 4800 }), new Date(2026, 4, 1), false),
+    ).toBe(4800);
   });
 
   it('shows an archived account through the month it was last valued in', () => {
-    const may = timelineCellValue(row(), new Date(2026, 4, 1), {
-      archived: true,
-      lastValuedMonth: '2026-05',
-    });
-
-    expect(may).toBe(5000);
+    expect(timelineCellValue(row(), new Date(2026, 4, 1), true)).toBe(5000);
   });
 
   it('keeps an archived account in the months before its last valuation', () => {
-    const march = timelineCellValue(row({ valued_on: '2026-03-31' }), new Date(2026, 2, 1), {
-      archived: true,
-      lastValuedMonth: '2026-05',
-    });
+    const march = row({ valued_on: '2026-03-31', last_valued_on: '2026-05-31' });
 
-    expect(march).toBe(5000);
+    expect(timelineCellValue(march, new Date(2026, 2, 1), true)).toBe(5000);
   });
 
   it('drops an archived account after its last valuation, even on a non-zero balance', () => {
-    // The regression this guards: `get_net_worth_summary` carries the last
-    // valuation forward indefinitely, so a closed account left holding 5000
-    // would otherwise be added to every later month's total for good.
-    const june = timelineCellValue(row(), new Date(2026, 5, 1), {
-      archived: true,
-      lastValuedMonth: '2026-05',
-    });
-    const nextYear = timelineCellValue(row(), new Date(2027, 0, 1), {
-      archived: true,
-      lastValuedMonth: '2026-05',
-    });
+    // `get_net_worth_summary` carries the last valuation forward indefinitely,
+    // so a closed account left holding 5000 would otherwise be added to every
+    // later month's total for good.
+    expect(timelineCellValue(row(), new Date(2026, 5, 1), true)).toBeNull();
+    expect(timelineCellValue(row(), new Date(2027, 0, 1), true)).toBeNull();
+  });
 
-    expect(june).toBeNull();
-    expect(nextYear).toBeNull();
+  it('keeps an archived account alive in a window that ends before its final valuation', () => {
+    // Valued in Jan 2024 and again in Jan 2026, viewed through a 2025 window:
+    // every row in that window carries the Jan 2024 valuation forward. Judging
+    // the cut-off from those rows would read the account as finished in Jan
+    // 2024 and blank out a year it was demonstrably still live.
+    const carriedForward = row({ valued_on: '2024-01-31', last_valued_on: '2026-01-31' });
+
+    expect(timelineCellValue(carriedForward, new Date(2025, 5, 1), true)).toBe(5000);
+    expect(timelineCellValue(carriedForward, new Date(2025, 11, 1), true)).toBe(5000);
   });
 
   it('compares by month, not by day, so a mid-month valuation still counts', () => {
-    const value = timelineCellValue(row({ valued_on: '2026-05-15' }), new Date(2026, 4, 1), {
-      archived: true,
-      lastValuedMonth: '2026-05',
-    });
+    const midMonth = row({ valued_on: '2026-05-15', last_valued_on: '2026-05-15' });
 
-    expect(value).toBe(5000);
+    expect(timelineCellValue(midMonth, new Date(2026, 4, 1), true)).toBe(5000);
   });
 
   it('orders months numerically across a year boundary', () => {
-    const january = timelineCellValue(row({ valued_on: '2027-01-31' }), new Date(2027, 0, 1), {
-      archived: true,
-      lastValuedMonth: '2027-01',
-    });
-    const december = timelineCellValue(row({ valued_on: '2026-09-30' }), new Date(2026, 11, 1), {
-      archived: true,
-      lastValuedMonth: '2026-09',
-    });
+    const january = row({ valued_on: '2027-01-31', last_valued_on: '2027-01-31' });
+    const september = row({ valued_on: '2026-09-30', last_valued_on: '2026-09-30' });
 
-    expect(january).toBe(5000);
-    expect(december).toBeNull();
+    expect(timelineCellValue(january, new Date(2027, 0, 1), true)).toBe(5000);
+    expect(timelineCellValue(september, new Date(2026, 11, 1), true)).toBeNull();
   });
 });
