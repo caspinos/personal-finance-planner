@@ -1,5 +1,5 @@
 import { NetWorthSummaryRow } from '../../../core/net-worth/net-worth.service';
-import { timelineCellValue } from './net-worth-timeline';
+import { columnTotal, monthOverMonthChanges, timelineCellValue } from './net-worth-timeline';
 
 function row(overrides: Partial<NetWorthSummaryRow> = {}): NetWorthSummaryRow {
   return {
@@ -36,9 +36,7 @@ describe('timelineCellValue', () => {
   });
 
   it('prefers the base-currency figure when one is available', () => {
-    expect(
-      timelineCellValue(row({ value_in_base: 4800 }), new Date(2026, 4, 1), false),
-    ).toBe(4800);
+    expect(timelineCellValue(row({ value_in_base: 4800 }), new Date(2026, 4, 1), false)).toBe(4800);
   });
 
   it('shows an archived account through the month it was last valued in', () => {
@@ -82,5 +80,38 @@ describe('timelineCellValue', () => {
 
     expect(timelineCellValue(january, new Date(2027, 0, 1), true)).toBe(5000);
     expect(timelineCellValue(september, new Date(2026, 11, 1), true)).toBeNull();
+  });
+});
+
+describe('columnTotal', () => {
+  it('sums the months that have a figure', () => {
+    expect(columnTotal([1000, null, -250])).toBe(750);
+  });
+
+  it('is unknown rather than zero when no account has a figure', () => {
+    // A window reaching back before the first valuation would otherwise claim
+    // a net worth of exactly zero, and the first recorded month would read as
+    // a jump up from nothing.
+    expect(columnTotal([null, null])).toBeNull();
+    expect(columnTotal([])).toBeNull();
+  });
+
+  it('keeps a genuine zero apart from an unknown month', () => {
+    expect(columnTotal([0, null])).toBe(0);
+  });
+});
+
+describe('monthOverMonthChanges', () => {
+  it('has no change for the first month of a window', () => {
+    expect(monthOverMonthChanges([1000, 1200])).toEqual([null, 200]);
+  });
+
+  it('reports a fall as a negative change', () => {
+    expect(monthOverMonthChanges([1000, 400])).toEqual([null, -600]);
+  });
+
+  it('skips a comparison across an unknown month', () => {
+    expect(monthOverMonthChanges([null, 1000, 1500])).toEqual([null, null, 500]);
+    expect(monthOverMonthChanges([1000, null, 1500])).toEqual([null, null, null]);
   });
 });

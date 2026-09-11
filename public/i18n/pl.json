@@ -308,7 +308,18 @@
     "loading": "Ładowanie widoku w czasie...",
     "item": "Pozycja",
     "total": "Suma",
-    "changeMoM": "Zmiana m/m"
+    "changeMoM": "Zmiana m/m",
+    "tableCaption": "Wartości kont na koniec każdego miesiąca, przeliczone na {{currency}}.",
+    "trendTitle": "Majątek netto w czasie",
+    "trendDescription": "Suma na koniec każdego miesiąca, w {{currency}}.",
+    "trendAria": "Wykres liniowy sumy majątku netto na koniec każdego miesiąca w wybranym oknie 12 miesięcy. Te same wartości są wypisane pod wykresem.",
+    "changeTitle": "Zmiana miesiąc do miesiąca",
+    "changeDescription": "O ile suma zmieniła się względem poprzedniego miesiąca, w {{currency}}.",
+    "changeAria": "Wykres słupkowy zmiany sumy majątku netto miesiąc do miesiąca, powyżej i poniżej linii zera. Te same wartości są wypisane pod wykresem.",
+    "sinceLastMonth": "wzgl. poprzedniego miesiąca",
+    "notEnoughData": "Za mało zapisanych miesięcy, aby narysować wykres.",
+    "previousMonth": "Poprzedni miesiąc",
+    "nextMonth": "Następny miesiąc"
   },
   "accountForm": {
     "title": "Nowe konto majątkowe",
