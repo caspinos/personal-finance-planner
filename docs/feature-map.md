@@ -144,6 +144,18 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   account's history page (`New holding`, per-holding position summary), a
   dedicated holding history page listing all buy/sell transactions with
   edit/delete, and forms to record/edit transactions
+- ✅ Net worth over time (`/net-worth/timeline`, "View over time" on the net
+  worth page): a rolling twelve-month window showing every account's
+  end-of-month value in the base currency, grouped by account type, with a
+  total and a month-over-month change row. Months no account has a figure in
+  read as unknown rather than zero, so a window reaching back before the first
+  valuation does not claim a net worth of zero. Two charts head the page — a
+  net worth trend line and a month-over-month change column chart — drawn as
+  inline SVG from `src/app/shared/charts` (no charting dependency), with hover
+  tooltips and the table underneath as the accessible data view. Below `md`
+  the twelve-column table is replaced by a one-month-at-a-time list with its
+  own month stepper, which rolls into the neighbouring window at either edge:
+  the full table needs a horizontal scroll per month on a phone
 - ✅ End-to-end (Playwright) coverage for the net worth flow: account
   creation, recording/editing/deleting valuations, bulk valuation entry
   (including prefill/overwrite for an already-valued date and skipping
@@ -186,7 +198,9 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
 All ⬜ not started:
 
 - ⬜ Dashboard with real indicators (currently a static placeholder)
-- ⬜ Monthly summaries, expense charts, net worth charts
+- 🚧 Monthly summaries, expense charts, net worth charts — net worth trend
+  and month-over-month charts exist on the net worth timeline page; nothing
+  yet for the budget side
 - ⬜ Breakdown by category / envelope / user / period
 - ⬜ Month-over-month comparisons
 

@@ -309,7 +309,18 @@
     "loading": "Loading timeline...",
     "item": "Item",
     "total": "Total",
-    "changeMoM": "Change m/m"
+    "changeMoM": "Change m/m",
+    "tableCaption": "Account balances at the end of each month, converted to {{currency}}.",
+    "trendTitle": "Net worth trend",
+    "trendDescription": "Total at the end of each month, in {{currency}}.",
+    "trendAria": "Line chart of total net worth at the end of each month in the selected 12-month window. The same figures are listed in the table below.",
+    "changeTitle": "Change month over month",
+    "changeDescription": "How much the total moved from the previous month, in {{currency}}.",
+    "changeAria": "Column chart of the month-over-month change in total net worth, above and below a zero baseline. The same figures are in the last row of the table below.",
+    "sinceLastMonth": "vs. previous month",
+    "notEnoughData": "Not enough recorded months to chart yet.",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month"
   },
   "accountForm": {
     "title": "New asset account",
