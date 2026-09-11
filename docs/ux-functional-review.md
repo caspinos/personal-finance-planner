@@ -1,266 +1,265 @@
-# Przegląd ergonomii i funkcjonalności — Personal Finance Planner
+# UX and Functionality Review — Personal Finance Planner
 
-Data przeglądu: 2026-09-11
-Zakres: kod źródłowy aplikacji (Angular + Supabase), migracje, testy e2e, dokumentacja.
-Metoda: analiza statyczna kodu (bez uruchamiania aplikacji w przeglądarce — patrz sekcja "Zastrzeżenia").
+Review date: 2026-09-11
+Scope: application source code (Angular + Supabase), migrations, e2e tests, documentation.
+Method: static code analysis (the app was not run in a browser — see "Caveats").
 
-Legenda priorytetów:
-- **P1** — poważnie utrudnia codzienne użycie lub prowadzi do błędnych danych
-- **P2** — istotna niedogodność, warto poprawić w najbliższych iteracjach
-- **P3** — drobiazg / szlif
-
-
-## Streszczenie — 10 najważniejszych wniosków
-
-1. **Dashboard jest pusty** — pierwszy ekran nie pokazuje żadnej liczby; brak wskaźników z planu (MVP pkt 11).
-2. **Wpisywanie wydatku jest za długie** — 3 kliknięcia do formularza, brak „zapisz i dodaj kolejny”, brak przycisku „Anuluj”, po edycji powrót w złe miejsce.
-3. **Karty kopert pokazują tylko saldo narastające** — brak „wydano X z Y w tym miesiącu”, brak celów/limitów kopert, brak sumy wszystkich kopert.
-4. **Konta majątkowe i holdingi nie mają edycji ani usuwania** — literówka = nowe konto i utrata historii.
-5. **Wartość rynkowa holdingu = cena ostatniej transakcji** — „niezrealizowany zysk” jest bezużyteczny; ceny surowców nigdzie nie są używane; holdingi nie zasilają wyceny konta.
-6. **Suma majątku miesza waluty** przy braku kursu, zamiast pominąć konto lub oznaczyć sumę jako niepełną.
-7. **Role nie są egzekwowane w UI** — `viewer` widzi przyciski zapisu i dostaje surowy błąd RLS po wysłaniu formularza.
-8. **Brak resetu hasła i przełącznika gospodarstw** (oba możliwe małym kosztem, Supabase Auth i `selectHousehold` już istnieją).
-9. **Liczby i daty są formatowane po angielsku w polskim UI** — brak `registerLocaleData(pl)`.
-10. **Brak wyszukiwania/filtrów w historii i brak eksportu** danych (MVP pkt 12).
-
-Szczegóły i pozostałe uwagi (łącznie 18 × P1, ~60 × P2) w sekcjach poniżej; lista brakujących funkcji z proponowaną kolejnością w sekcji 7.
+Priority legend:
+- **P1** — seriously hampers everyday use or leads to incorrect data
+- **P2** — significant inconvenience, worth fixing in the next iterations
+- **P3** — minor / polish
 
 ---
 
-## 1. Nawigacja i powłoka aplikacji (shell, dashboard, routing)
+## Summary — the 10 most important findings
 
-Źródła: `src/app/layout/shell/shell.ts`, `src/app/features/dashboard/dashboard.ts`, `src/app/app.routes.ts`
+1. **The dashboard is empty** — the first screen shows no numbers at all; none of the indicators from the plan (MVP item 11).
+2. **Recording an expense takes too long** — three clicks to reach the form, no "save and add another", no "Cancel" button, and editing returns the user to the wrong place.
+3. **Envelope cards show only the cumulative balance** — no "spent X of Y this month", no envelope targets/limits, no total across envelopes.
+4. **Asset accounts and holdings cannot be edited or deleted** — a typo means creating a second account, with history split across the two.
+5. **A holding's market value is the price of its last transaction** — unrealized gain only reflects differences between transaction prices, never market movement; commodity prices are stored but never used; holdings do not feed the account valuation.
+6. **The net worth total mixes currencies** when a rate is missing, instead of skipping the account or flagging the total as incomplete.
+7. **Roles are not enforced in the UI** — a `viewer` sees save buttons and gets a raw RLS error after submitting a form.
+8. **No password reset and no household switcher** (both cheap to add: Supabase Auth and `selectHousehold` already exist).
+9. **Numbers and dates are formatted in English in the Polish UI** — no `registerLocaleData(pl)`.
+10. **No search/filters in history and no data export** (MVP item 12).
 
-### Co działa dobrze
-- Prosta, płaska nawigacja (5 pozycji), wersja mobilna z hamburgerem, przełącznik języka PL/EN, e-mail zalogowanego użytkownika i wylogowanie w nagłówku.
-- Wszystkie trasy są lazy-loadowane, guardy `authGuard` + `householdGuard` prowadzą nowego użytkownika przez tworzenie gospodarstwa.
+Details and the remaining notes (17 × P1, 58 × P2, 25 × P3 in total) are in the sections below; the missing-feature list with a proposed order is in section 7.
 
-### Problemy ergonomiczne
-- **P1 — Dashboard jest atrapą.** Strona startowa po zalogowaniu to karta powitalna z dwoma przyciskami. Użytkownik nie widzi ani jednej liczby (saldo kopert, ile wydano w miesiącu, majątek netto, najbliższe reguły cykliczne). Każde wejście do aplikacji wymaga dodatkowego kliknięcia, a pierwszy ekran nie daje żadnej informacji.
-- **P2 — Brak wskazania aktywnej pozycji menu.** Linki w `shell.ts` nie używają `routerLinkActive`; użytkownik nie wie, w której sekcji się znajduje (szczególnie na podstronach typu `/budget/history`).
-- **P2 — Brak wskaźnika/przełącznika gospodarstwa.** Nazwa bieżącego gospodarstwa pojawia się tylko w nagłówku dashboardu. Użytkownik należący do kilku gospodarstw (możliwe przez zaproszenia) nie ma jak przełączyć kontekstu — potwierdzone w `docs/feature-map.md` jako niezrobione. Ryzyko wpisania operacji do niewłaściwego gospodarstwa bez świadomości.
-- **P2 — Brak globalnego przycisku „szybko dodaj wydatek”.** Najczęstsza czynność (zapis wydatku) wymaga: Dashboard → Budżet → „Zapisz transakcję”. Na telefonie: hamburger → Budżet → przewinięcie → przycisk. Dobrą praktyką jest stały przycisk akcji (FAB / pozycja w nagłówku) dostępny z każdego ekranu.
-- **P3 — Selektor języka to natywny `<select>`** ze stylem ręcznym, niespójny z resztą (spartan). Podpisy „PL/EN” zamiast „Polski/English”. `aria-label="Language"` i `aria-label="Menu"` nie są tłumaczone.
-- **P3 — Brak breadcrumbów/tytułów stron.** `document.title` nie jest ustawiany per trasa (brak `title:` w definicjach tras) — wszystkie zakładki przeglądarki mają tę samą nazwę, historia przeglądarki jest bezużyteczna.
-- **P3 — Trasa `**` (404) nie istnieje.** Błędny adres pokazuje pustą powłokę zamiast komunikatu i linku do dashboardu.
-- **P3 — Brak trybu ciemnego.** Paleta `:root.dark` jest zdefiniowana w `styles.scss`, ale nic jej nie włącza (brak przełącznika i reakcji na `prefers-color-scheme`).
+---
 
-## 2. Budżet kopertowy
+## 1. Navigation and application shell (shell, dashboard, routing)
 
-Źródła: `src/app/features/budget/**`, `src/app/core/budget/budget.service.ts`
+Sources: `src/app/layout/shell/shell.ts`, `src/app/features/dashboard/dashboard.ts`, `src/app/app.routes.ts`
 
-### Co działa dobrze
-- Model „zdarzeniowy” (transakcje + transfery, saldo liczone w SQL) — salda przenoszą się między miesiącami automatycznie.
-- Amortyzacja dużych wydatków (rozłożenie w czasie) z podglądem raty w formularzu — funkcja rzadko spotykana w prostych narzędziach, dobrze przemyślana (edycja nagłówka przelicza raty).
-- Podpowiedzi nazw transakcji z automatycznym wyborem koperty — duże ułatwienie przy powtarzalnych wydatkach.
-- Zbiorcze zasilanie kopert (`bulk-funding-form`) z „szybką kwotą” i zaznacz wszystko/wyczyść.
-- Usuwanie koperty z przeniesieniem historii (atomowo w SQL) — bezpieczne.
-- Reguły cykliczne z pauzą/wznowieniem.
+### What works well
+- Simple, flat navigation (5 items), a mobile version with a hamburger menu, a PL/EN language switcher, the signed-in user's e-mail and sign-out in the header.
+- All routes are lazy-loaded; `authGuard` + `householdGuard` lead a new user straight to household creation.
 
-### Problemy ergonomiczne — ekran główny budżetu (`budget.ts`)
-- **P1 — Karty kopert pokazują wyłącznie saldo narastające.** Brakuje kluczowych informacji miesięcznych: ile wpłynęło, ile wydano w tym miesiącu, jaki procent zasilenia zużyto (pasek postępu). Bez tego nie da się ocenić „jak mi idzie w tym miesiącu” — trzeba wchodzić w historię każdej koperty osobno.
-- **P1 — Brak sumy / podsumowania na górze ekranu budżetu.** Nie ma łącznej kwoty we wszystkich kopertach, sumy wydatków i wpływów w miesiącu, liczby kopert na minusie. Użytkownik z 10+ kopertami nie ma widoku całości.
-- **P1 — Brak koncepcji „środki nieprzydzielone” / „do rozdysponowania”.** W metodzie kopertowej (YNAB, Goodbudget) dochód wpływa najpierw do puli, a potem jest dzielony na koperty. Tutaj „dochód” jest wpisywany bezpośrednio do koperty (typ `income` w `budget_transactions`), więc nic nie pilnuje, czy suma zasileń nie przekracza realnego dochodu gospodarstwa. Nie ma też miejsca na dochód, który jeszcze nie został podzielony.
-- **P2 — Przeładowany pasek akcji.** Sześć przycisków w jednym rzędzie (Historia, Transfer, Zapisz transakcję, Zasil koperty, Nowa koperta, Nowa reguła), trzy z nich w tym samym wariancie `secondary`. Na wąskim ekranie zawijają się do 2–3 rzędów. Rekomendacja: jeden główny przycisk (Zapisz wydatek), pozostałe w menu „Więcej” / w sekcji ustawień budżetu.
-- **P2 — Przełącznik miesiąca bez „Dziś”/wyboru miesiąca.** Aby wrócić do bieżącego miesiąca po przejrzeniu kilku wstecz trzeba klikać strzałką. Nie ma `<input type="month">` ani skoku do dowolnego miesiąca. Ten sam komponent jest skopiowany w 3 miejscach (`budget.ts`, `history.ts`, `envelope-history.ts`) — warto wydzielić wspólny `MonthSwitcher`.
-- **P2 — Wybrany miesiąc nie jest w URL.** Po wejściu w historię koperty i powrocie widok resetuje się do bieżącego miesiąca; odświeżenie strony też gubi kontekst. Miesiąc powinien być parametrem zapytania (`?month=2026-08`).
-- **P2 — Kolejność kopert tylko wg daty utworzenia.** Brak ręcznego sortowania (drag&drop / kolejność), grupowania (np. „Stałe”, „Zmienne”, „Oszczędności”), ani sortowania po saldzie. Przy większej liczbie kopert lista staje się chaotyczna.
-- **P2 — Reguły cykliczne są uruchamiane przy wejściu na stronę budżetu** (`processDueRecurringRules()` w `loadAll()`). Jeśli nikt nie otworzy zakładki Budżet przez kilka dni, zasilenia/obciążenia zapisują się z opóźnieniem (weryfikacja daty w SQL — patrz migracje). Użytkownik nie dostaje żadnej informacji, że „właśnie zaksięgowano 3 reguły”. Lepiej: `pg_cron`/edge function + toast po wykonaniu.
-- **P2 — Reguły cykliczne wyświetlane na dole strony głównej budżetu** w pełnej liście z przyciskami Edytuj/Pauza/Usuń. To konfiguracja, nie codzienna praca — zajmuje miejsce pod kopertami. Lepsze miejsce: osobna podstrona/ zakładka „Reguły” lub zwijana sekcja.
-- **P2 — Waluta „PLN” wpisana na sztywno w szablonach** (`{{ ... }} PLN`), choć tabela `budget_transactions` ma kolumnę `currency`, a gospodarstwo ma `base_currency`. Jeśli ktoś ustawi walutę bazową na EUR, budżet i tak jest w PLN (a wartość „≈ w walucie bazowej” pokazuje przeliczenie). To mylące dla użytkownika spoza Polski i niespójne z założeniami projektu (multi-currency).
-- **P3 — Potwierdzanie usunięcia przez `window.confirm`** (reguły, transakcje, transfery) zamiast dialogu spartan; nie da się ostylować, wygląda obco na tle reszty UI, blokuje cały tab.
-- **P3 — `aria-label="Previous month"` / `"Next month"` nie tłumaczone.**
-- **P3 — Pusty stan (brak kopert)** informuje tylko tekstem; nie ma przycisku „Utwórz pierwszą kopertę” ani szablonów startowych (np. Jedzenie, Mieszkanie, Transport, Rozrywka, Oszczędności).
+### Ergonomic problems
+- **P1 — The dashboard is a placeholder.** The landing page after sign-in is a welcome card with two buttons. The user sees not a single number (envelope balances, this month's spending, net worth, upcoming recurring rules). Every visit needs an extra click and the first screen carries no information.
+- **P2 — No active-item indication in the menu.** The links in `shell.ts` do not use `routerLinkActive`; the user cannot tell which section they are in (especially on sub-pages such as `/budget/history`).
+- **P2 — No household indicator/switcher.** The current household's name appears only in the dashboard heading. A user belonging to several households (possible via invites) has no way to switch context — confirmed as not done in `docs/feature-map.md`. Risk of entering operations into the wrong household without noticing.
+- **P2 — No global "quick add expense" button.** The most frequent action (recording an expense) requires Dashboard → Budget → "Record transaction". On a phone: hamburger → Budget → scroll → button. A persistent action button (FAB / header item) available on every screen is good practice.
+- **P3 — The language selector is a native `<select>`** with hand-written styling, inconsistent with the rest (spartan). Labels are "PL/EN" instead of "Polski/English". `aria-label="Language"` and `aria-label="Menu"` are not translated.
+- **P3 — No breadcrumbs/page titles.** `document.title` is not set per route (no `title:` in the route definitions) — every browser tab has the same name and browser history is useless.
+- **P3 — No `**` (404) route.** A wrong address shows an empty shell instead of a message and a link to the dashboard.
+- **P3 — No dark mode.** The `:root.dark` palette is defined in `styles.scss`, but nothing enables it (no toggle and no reaction to `prefers-color-scheme`).
 
-### Problemy ergonomiczne — formularze (transakcja, transfer, koperta, reguła)
-- **P1 — Formularze nie mają przycisku „Anuluj”/„Wróć”.** Jedyna droga wyjścia to przycisk „Wstecz” przeglądarki lub menu. Dotyczy: `transaction-form`, `transfer-form`, `envelope-form`, `recurring-rule-form`, `bulk-funding-form`. (Wyjątek: `envelope-delete` ma „Anuluj”).
-- **P1 — Brak szybkiego wielokrotnego wpisywania.** Po zapisaniu transakcji aplikacja zawsze wraca na `/budget`. Wpisanie 10 paragonów = 10 × (przycisk → formularz → zapis → powrót). Potrzebne „Zapisz i dodaj kolejną” (z zachowaniem daty i koperty) lub formularz w dialogu/panelu bocznym nad listą.
-- **P1 — Po edycji z widoku „Historia wszystkich operacji” użytkownik trafia do historii koperty**, nie tam, skąd przyszedł (`navigateByUrl('/budget/envelopes/${id}')`). Brak `returnUrl`. To samo po edycji z historii koperty w innym miesiącu — wraca do bieżącego miesiąca.
-- **P2 — Kolejność pól w formularzu transakcji jest nieoptymalna.** „Nazwa” (która automatycznie ustawia kopertę na podstawie historii) jest ostatnim polem. Naturalny przepływ: Nazwa → (auto)Koperta → Kwota → Data. Pole kwoty ma domyślną wartość `0` — użytkownik musi ją skasować przed wpisaniem; lepiej puste pole z placeholderem `0,00`.
-- **P2 — Typ „Wydatek/Dochód” to toggle-group poza formularzem reaktywnym** — OK, ale w formularzu transferu i wielu innych walidacja selectów pojawia się dopiero po `submit`; komunikat o brakującej kopercie nie jest powiązany `aria-describedby` z kontrolką.
-- **P2 — Formularze są wyśrodkowane w pionie w kontenerze `min-h-svh`** *wewnątrz* powłoki, która ma już nagłówek. Efekt: strona jest wyższa niż okno (nagłówek + 100svh), pojawia się zbędny scroll, a formularz na desktopie „wisi” w środku pustego ekranu daleko od menu. Kontener powinien być zwykłym blokiem u góry strony (jak listy).
-- **P2 — Podpowiedzi nazw korzystają z natywnego `<datalist>`.** Działa nierówno między przeglądarkami (Safari iOS ignoruje, Firefox pokazuje dopiero po wpisaniu), nie pokazuje koperty/kwoty obok podpowiedzi, a ograniczenie do 200 ostatnich rekordów bez deduplikacji po kopercie jest arbitralne. Lepszy: własny combobox (spartan `command`/`combobox`) z ostatnią kwotą i kopertą w podpowiedzi.
-- **P2 — Brak kategorii/tagów i notatki na transakcji.** Jest tylko `name`. Nie da się zapisać np. „Biedronka — zakupy na grilla” z tagiem, ani załączyć paragonu. Raporty per kategoria (plan Etap 4) nie mają na czym pracować, bo kategoria = koperta.
-- **P2 — Brak wskazania, kto zapisał operację** (`created_by` jest w bazie, nie jest pokazywane) — przy współdzieleniu przez domowników to istotna informacja („kto wydał 300 zł w kopercie Rozrywka?”).
-- **P2 — Reguły cykliczne tylko miesięczne (dzień 1–28).** Brak tygodniowych, kwartalnych, rocznych (ubezpieczenie, podatek), brak daty końcowej ani daty startu (rusza od „następnego wystąpienia”). Brak podglądu „w tym miesiącu wykona się X reguł na sumę Y”.
-- **P2 — Zbiorcze zasilanie nie pamięta poprzednich kwot.** Co miesiąc trzeba wpisywać kwoty od nowa; brak „powtórz zasilenie z zeszłego miesiąca” ani domyślnej kwoty per koperta (cel/limit koperty).
-- **P2 — Zbiorcze zasilanie zapisuje wpisy sekwencyjnie, nieatomowo** (pętla `recordTransaction` w `bulk-funding-form`). Przy błędzie w środku część kopert jest zasilona, część nie; komunikat informuje tylko o liczbie zapisanych. Powinno iść jednym RPC/transakcją jak `recordValuations` w majątku.
-- **P3 — Niespójne parsowanie daty:** `transaction-form` używa bezpiecznego `fromDateInputValue`, a `transfer-form` i `bulk-funding-form` `new Date(occurredOn)` (UTC). W strefach ujemnych data przesunie się o dzień. W Polsce nie zaboli, ale to bomba z opóźnionym zapłonem dla multi-currency/zagranicznych domowników.
-- **P3 — Kwota `type="number"`** bez `inputmode="decimal"` i bez obsługi przecinka dziesiętnego w polskiej klawiaturze (na Androidzie klawiatura numeryczna czasem nie ma kropki). Warto rozważyć własne pole kwoty akceptujące „12,50”.
+## 2. Envelope budget
 
-### Problemy ergonomiczne — historia (`history.ts`, `envelope-history.ts`)
-- **P1 — Brak wyszukiwania i filtrów** (po nazwie, kopercie, typie, zakresie kwot). Historia globalna to lista wyłącznie jednego miesiąca; znalezienie „kiedy ostatnio płaciłem za OC” wymaga klikania miesiąc po miesiącu.
-- **P2 — Brak podsumowań w historii:** suma wpływów, wydatków i bilans miesiąca nad listą; brak grupowania po dniach.
-- **P2 — Historia globalna nie pokazuje rat amortyzacji** (`loadAllEvents` nie pobiera `get_amortized_charges`), więc suma pozycji na liście nie zgadza się ze zmianą sald kopert.
-- **P2 — Lista to karty z ramką i dwoma przyciskami na każdym wierszu** (Edytuj, Usuń). Przy 100 operacjach w miesiącu jest to ciężkie wizualnie i długie; tabela/lista zwarta z akcjami w menu kontekstowym lub po najechaniu byłaby czytelniejsza. Brak paginacji/wirtualizacji.
-- **P2 — Komunikat potwierdzenia usunięcia dostaje surowy `kind`** (`transaction`/`transfer`) jako parametr — do sprawdzenia w plikach tłumaczeń, czy nie wyświetla angielskiego słowa w polskim komunikacie.
-- **P3 — Brak eksportu (CSV)** listy operacji.
+Sources: `src/app/features/budget/**`, `src/app/core/budget/budget.service.ts`
 
-## 3. Majątek netto i inwestycje
+### What works well
+- The event-based model (transactions + transfers, balance computed in SQL) — balances carry over between months automatically.
+- Amortized (spread-over-time) expenses with a monthly-slice preview in the form — a feature rarely found in simple tools, well thought out (editing the header re-derives the slices).
+- Transaction-name suggestions with automatic envelope selection — a big help for repeat expenses.
+- Bulk envelope funding (`bulk-funding-form`) with a "quick amount" and select all / clear all.
+- Envelope deletion with history transfer (atomic in SQL) — safe.
+- Recurring rules with pause/resume.
 
-Źródła: `src/app/features/net-worth/**`, `src/app/core/net-worth/net-worth.service.ts`, migracje `*net_worth*`, `*asset_holdings*`, `*signed_valuation_values*`
+### Ergonomic problems — main budget screen (`budget.ts`)
+- **P1 — Envelope cards show only the cumulative balance.** Key monthly information is missing: how much came in, how much was spent this month, what share of the funding has been used (progress bar). Without it there is no way to judge "how am I doing this month" — each envelope's history has to be opened separately.
+- **P1 — No total / summary at the top of the budget screen.** There is no total across all envelopes, no monthly spend and income, no count of envelopes in the red. A user with 10+ envelopes has no overview.
+- **P1 — No "unallocated" / "to be assigned" concept.** In the envelope method (YNAB, Goodbudget) income first lands in a pool and is then split into envelopes. Here "income" is entered directly into an envelope (type `income` in `budget_transactions`), so nothing checks whether the sum of top-ups exceeds the household's real income. There is also no place for income that has not yet been split.
+- **P2 — Overloaded action bar.** Six buttons in one row (History, Transfer, Record transaction, Fund envelopes, New envelope, New recurring rule), three of them in the same `secondary` variant. On a narrow screen they wrap onto 2–3 rows. Recommendation: one primary button (Record expense), the rest in a "More" menu / a budget settings section.
+- **P2 — Month switcher without "Today" / month picker.** Returning to the current month after browsing a few months back requires clicking the arrow repeatedly. There is no `<input type="month">` and no jump to an arbitrary month. The same component is copied in 3 places (`budget.ts`, `history.ts`, `envelope-history.ts`) — worth extracting a shared `MonthSwitcher`.
+- **P2 — The selected month is not in the URL.** After opening an envelope's history and returning, the view resets to the current month; a page refresh also loses the context. The month should be a query parameter (`?month=2026-08`).
+- **P2 — Envelopes are ordered only by creation date.** No manual ordering (drag & drop / sort order), no grouping (e.g. "Fixed", "Variable", "Savings"), no sorting by balance. With more envelopes the list becomes chaotic.
+- **P2 — Recurring rules run when the budget page is opened** (`processDueRecurringRules()` in `loadAll()`). If nobody opens the Budget tab for a few days, top-ups/charges are recorded late (the date is verified in SQL — see migrations). The user gets no feedback that "3 rules have just been posted". Better: `pg_cron`/edge function + a toast after execution.
+- **P2 — Recurring rules are displayed at the bottom of the main budget page** as a full list with Edit/Pause/Delete buttons. This is configuration, not daily work — it takes up space below the envelopes. A better place: a separate sub-page/tab "Rules" or a collapsible section.
+- **P2 — "PLN" is hard-coded in templates** (`{{ ... }} PLN`), even though `budget_transactions` has a `currency` column and the household has a `base_currency`. If someone sets the base currency to EUR, the budget is still in PLN (with the "≈ in base currency" value showing a conversion). Confusing for a non-Polish user and inconsistent with the project's multi-currency assumption.
+- **P3 — Deletion confirmed via `window.confirm`** (rules, transactions, transfers) instead of a spartan dialog; cannot be styled, looks foreign next to the rest of the UI, blocks the whole tab.
+- **P3 — `aria-label="Previous month"` / `"Next month"` are not translated.**
+- **P3 — The empty state (no envelopes)** is text only; there is no "Create your first envelope" button and no starter templates (e.g. Food, Housing, Transport, Entertainment, Savings).
 
-### Co działa dobrze
-- Zbiorczy formularz wycen (`bulk-valuation-form`) — tabela z poprzednią wartością, prefill dla już wycenionej daty, zapis jednym upsertem, ochrona przed wyścigiem przy zmianie daty. To najlepiej zaprojektowany ekran w aplikacji.
-- Oś czasu 12 miesięcy (`net-worth-timeline`) z sumą i zmianą m/m, przemyślana obsługa kont zarchiwizowanych.
-- Grupowanie kont po typie z sumami częściowymi, filtr płynności, ostrzeżenie o brakującym kursie zamiast błędnej liczby.
-- Znak wartości zgodny z wkładem do majątku (zobowiązania ujemne), ostrzeżenie o nadpłaconym zobowiązaniu bez blokowania.
+### Ergonomic problems — forms (transaction, transfer, envelope, rule)
+- **P1 — Forms have no "Cancel"/"Back" button.** The only way out is the browser's back button or the menu. Affects `transaction-form`, `transfer-form`, `envelope-form`, `recurring-rule-form`, `bulk-funding-form`. (Exception: `envelope-delete` has "Cancel".)
+- **P1 — No fast repeated entry.** After saving a transaction the app always returns to `/budget`. Entering 10 receipts = 10 × (button → form → save → return). Needed: "Save and add another" (keeping date and envelope) or a form in a dialog/side panel above the list.
+- **P1 — After editing from "History of all operations" the user lands on the envelope's history**, not where they came from (`navigateByUrl('/budget/envelopes/${id}')`). No `returnUrl`. Same after editing from an envelope's history in another month — it returns to the current month.
+- **P2 — Field order in the transaction form is sub-optimal.** "Name" (which auto-selects the envelope based on history) is the last field. The natural flow: Name → (auto) Envelope → Amount → Date. The amount field defaults to `0` — the user has to delete it before typing; better an empty field with a `0.00` placeholder.
+- **P2 — The "Expense/Income" type is a toggle group outside the reactive form** — fine, but in the transfer form and elsewhere select validation appears only after `submit`; the "missing envelope" message is not linked to the control via `aria-describedby`.
+- **P2 — Forms are vertically centred in a `min-h-svh` container** *inside* the shell, which already has a header. Result: the page is taller than the viewport (header + 100svh), a needless scrollbar appears, and on desktop the form "floats" in the middle of an empty screen far from the menu. The container should be a normal block at the top of the page (like the lists).
+- **P2 — Name suggestions use a native `<datalist>`.** Behaves unevenly across browsers (Safari iOS ignores it, Firefox shows it only after typing), does not show the envelope/amount next to the suggestion, and the cap of the 200 most recent rows without per-envelope deduplication is arbitrary. Better: a custom combobox (spartan `command`/`combobox`) with the last amount and envelope in the suggestion.
+- **P2 — No categories/tags and no note on a transaction.** There is only `name`. You cannot record e.g. "Biedronka — barbecue shopping" with a tag, or attach a receipt. Per-category reports (plan Stage 4) have nothing to work on, because category = envelope.
+- **P2 — No indication of who recorded an operation** (`created_by` is in the database, not shown) — when sharing with household members this matters ("who spent 300 zł from Entertainment?").
+- **P2 — Recurring rules are monthly only (day 1–28).** No weekly, quarterly, yearly (insurance, tax), no end date and no start date (starts from the "next occurrence"). No preview "X rules totalling Y will run this month".
+- **P2 — Bulk funding does not remember previous amounts.** Amounts have to be typed from scratch every month; no "repeat last month's funding" and no default amount per envelope (envelope target/limit).
+- **P2 — Bulk funding saves entries sequentially, non-atomically** (a `recordTransaction` loop in `bulk-funding-form`). On an error midway some envelopes are funded and some are not; the message only reports the number saved. It should go through a single RPC/transaction like `recordValuations` in net worth.
+- **P3 — Inconsistent date parsing:** `transaction-form` uses the safe `fromDateInputValue`, while `transfer-form` and `bulk-funding-form` use `new Date(occurredOn)` (UTC). In negative-offset time zones the date shifts by a day. Harmless in Poland, but a time bomb for multi-currency / household members abroad.
+- **P3 — Amount inputs are `type="number"`** without `inputmode="decimal"` and without handling a decimal comma on a Polish keyboard (on Android the numeric keyboard sometimes lacks a dot). Consider a custom amount field accepting "12,50".
 
-### Problemy ergonomiczne — ekran główny (`net-worth.ts`)
-- **P1 — Brak podziału Aktywa / Zobowiązania / Netto.** Jest tylko jedna liczba „majątek netto”. Standardowy widok to trzy wskaźniki (suma aktywów, suma zobowiązań, netto) plus zmiana od poprzedniego miesiąca — bez tego trzeba wchodzić w oś czasu.
-- **P1 — Suma i sumy grup mieszają waluty przy braku kursu.** `totalNetWorth` i `group.subtotal` liczą `value_in_base ?? value` — konto w USD bez kursu jest dodawane do sumy w PLN jako liczba nominalna. Jest ostrzeżenie tekstowe, ale sama liczba jest błędna. Lepiej: pominąć takie konto w sumie i pokazać „suma niekompletna” lub zablokować sumę.
-- **P2 — Brak wyboru daty „stan na dzień”.** `asOf` to zawsze dziś; nie da się zobaczyć stanu na koniec zeszłego roku bez czytania osi czasu.
-- **P2 — Brak wykresu.** Oś czasu to wyłącznie tabela liczb; wykres liniowy majątku netto i skumulowany słupkowy per typ aktywów to podstawowa potrzeba (plan Etap 4).
-- **P2 — Brak informacji o „przeterminowanych” wycenach.** Karta pokazuje datę wyceny, ale nie wyróżnia kont niewycenianych od >30/60 dni; nie ma listy „do aktualizacji”.
-- **P2 — Brak struktury/alokacji.** Nie ma udziału procentowego każdej grupy w majątku, ani podziału wg płynności czy właściciela (pole `owner_name` istnieje, ale nigdzie nie jest prezentowane ani nie da się po nim filtrować).
-- **P2 — Konta zarchiwizowane są niewidoczne** na liście głównej i nie ma przełącznika „pokaż zarchiwizowane” — jedyny sposób dotarcia to oś czasu (jeśli konto miało wartość w oknie) lub bezpośredni URL.
-- **P3 — Karty per konto powtarzają ten sam układ co koperty**; przy 15+ kontach lista kart jest długa. Widok tabelaryczny (nazwa, typ, waluta, wartość, data wyceny, zmiana) byłby czytelniejszy — analogicznie do zbiorczego formularza wycen.
+### Ergonomic problems — history (`history.ts`, `envelope-history.ts`)
+- **P1 — No search and no filters** (by name, envelope, type, amount range). The global history is a single-month list only; finding "when did I last pay the car insurance" means clicking month by month.
+- **P2 — No summaries in history:** total income, spending and month balance above the list; no grouping by day.
+- **P2 — The global history does not show amortization slices** (`loadAllEvents` does not fetch `get_amortized_charges`), so the sum of the listed items does not match the change in envelope balances.
+- **P2 — The list consists of bordered cards with two buttons on every row** (Edit, Delete). With 100 operations a month this is visually heavy and long; a table/compact list with actions in a context menu or on hover would be more readable. No pagination/virtualization.
+- **P2 — The delete-confirmation message receives the raw `kind`** (`transaction`/`transfer`) as a parameter — confirmed in the translation files: a Polish user reads "Usunąć tę operację (transaction)?".
+- **P3 — No export (CSV)** of the operation list.
 
-### Problemy ergonomiczne — konto, wyceny
-- **P1 — Konta nie da się edytować.** `NetWorthService` nie ma `updateAccount`, a `account-form` obsługuje tylko tworzenie. Literówka w nazwie, zmiana instytucji, kategorii, płynności lub typu wymaga założenia nowego konta i utraty historii. Nie ma też usuwania konta (nawet pustego).
-- **P2 — Waluta konta to pole tekstowe 3-literowe** bez listy/walidacji ISO (można wpisać „ZLO”). Rekomendacja: select z popularnymi walutami + możliwość wpisania własnej.
-- **P2 — Pola „Kategoria” i „Właściciel” to wolny tekst** bez podpowiedzi z istniejących wartości, co prowadzi do rozjazdu („Ja”, „ja”, „Dariusz”).
-- **P2 — Formularz pojedynczej wyceny wymaga wpisania pełnej wartości.** Brak trybu „zmiana o kwotę” (+500 / −200) i brak podpowiedzi poprzedniej wartości obok pola (jest w formularzu zbiorczym, nie ma tu).
-- **P2 — Pole „Wpłaty/wypłaty (contribution)” jest niewyjaśnione w formularzu** — użytkownik nie wie, po co je wypełniać i jak wpływa na raporty (obecnie w UI nie jest nigdzie użyte poza wyświetleniem w historii). Zebrane dane nie dają wartości, dopóki nie ma raportu „przyrost z wpłat vs. z rynku”.
-- **P2 — Historia wycen nie pokazuje zmiany między wycenami** (delta, %), jest surowa lista.
-- **P3 — Po zapisaniu wyceny z poziomu ekranu głównego użytkownik trafia do historii konta**, a nie tam, skąd przyszedł (ten sam problem `returnUrl` co w budżecie).
+## 3. Net worth and investments
 
-### Problemy ergonomiczne — holdingi (instrumenty inwestycyjne)
-- **P1 — Wartość rynkowa holdingu = ostatnia cena transakcyjna.** `get_holding_positions` bierze `latest_price` z ostatniej operacji kupna/sprzedaży; nie da się wprowadzić bieżącego kursu instrumentu bez fikcyjnej transakcji. W efekcie „niezrealizowany zysk” jest prawie zawsze ≈ 0 i wskaźnik jest bezużyteczny. Potrzebna tabela cen instrumentów (data, cena) — analogicznie do `commodity_prices` — i formularz „aktualizuj ceny” podobny do zbiorczych wycen.
-- **P1 — Holdingi nie zasilają wyceny konta.** Dokumentacja mówi, że holdingi są „dodatkowe” wobec ręcznej wyceny konta. W praktyce użytkownik wpisuje kupno ETF-u i osobno musi ręcznie zaktualizować wartość konta maklerskiego, inaczej majątek netto nie drgnie. Sugestia: opcja „wartość konta = suma holdingów + gotówka” albo przycisk „zapisz wycenę z pozycji”.
-- **P2 — Holdingu nie da się edytować, zarchiwizować ani usunąć** (brak metod w serwisie i UI); literówka w tickerze zostaje na zawsze.
-- **P2 — Sprzedaż nie liczy zysku zrealizowanego** ani nie pokazuje historii zrealizowanych zysków (istotne podatkowo, PIT-38).
-- **P2 — Holdingi dostępne tylko dla kont typu `investment`**; konta `precious_metals` (uncje złota) czy `currency` (waluta obca w gotówce) nie mogą mieć pozycji ilościowych, mimo że istnieje tabela `commodity_prices`.
-- **P3 — Łączna wartość holdingów nie jest pokazywana** na stronie konta (tylko per pozycja), brak też porównania z ręczną wyceną konta.
+Sources: `src/app/features/net-worth/**`, `src/app/core/net-worth/net-worth.service.ts`, migrations `*net_worth*`, `*asset_holdings*`, `*signed_valuation_values*`
 
-## 4. Kursy walut i ceny surowców
+### What works well
+- The bulk valuation form (`bulk-valuation-form`) — a table with the previous value, prefill for an already-valued date, a single upsert on save, race protection when changing the date. The best-designed screen in the app.
+- The 12-month timeline (`net-worth-timeline`) with a total and month-over-month change, thoughtful handling of archived accounts.
+- Accounts grouped by type with subtotals, a liquidity filter, a "missing rate" warning instead of a wrong number.
+- Value sign consistent with its contribution to net worth (liabilities negative), an overpaid-liability warning without blocking.
 
-Źródła: `src/app/features/rates/**`, `src/app/core/rates/**`, migracja `20260705010000_multi_currency_rates.sql`
+### Ergonomic problems — main screen (`net-worth.ts`)
+- **P1 — No Assets / Liabilities / Net split.** There is only a single "net worth" number. The standard view is three indicators (total assets, total liabilities, net) plus the change since the previous month — without it the timeline has to be consulted.
+- **P1 — The total and group subtotals mix currencies when a rate is missing.** `totalNetWorth` and `group.subtotal` compute `value_in_base ?? value` — a USD account without a rate is added to the PLN total at face value. There is a textual warning, but the number itself is wrong. Better: skip such an account in the total and show "total incomplete", or withhold the total.
+- **P2 — No "as of date" picker.** `asOf` is always today; there is no way to see the state at the end of last year without reading the timeline.
+- **P2 — No chart.** The timeline is a table of numbers only; a net worth line chart and a stacked bar per asset type are a basic need (plan Stage 4).
+- **P2 — No indication of "stale" valuations.** The card shows the valuation date but does not highlight accounts not valued for >30/60 days; there is no "needs update" list.
+- **P2 — No structure/allocation.** No percentage share of each group in net worth, no split by liquidity or owner (the `owner_name` field exists but is neither shown nor filterable).
+- **P2 — Archived accounts are invisible** on the main list and there is no "show archived" toggle — the only way to reach them is the timeline (if the account had a value in the window) or a direct URL.
+- **P3 — Per-account cards repeat the envelope card layout**; with 15+ accounts the list is long. A table view (name, type, currency, value, valuation date, change) would be more readable — like the bulk valuation form.
 
-### Co działa dobrze
-- Pobieranie kursów z frankfurter.dev jednym przyciskiem; kursy zapisane z datą i źródłem.
-- Waluta bazowa gospodarstwa edytowalna przez właściciela; brak kursu nie prowadzi do błędnej liczby (`null` + ostrzeżenie).
-- Uprawnienia (owner/editor/viewer) poprawnie odzwierciedlone w UI tej strony.
+### Ergonomic problems — account, valuations
+- **P1 — An account cannot be edited.** `NetWorthService` has no `updateAccount`, and `account-form` handles creation only. A typo in the name, a change of institution, category, liquidity or type requires creating a second account; the old one and its valuations remain, so the history is split across two accounts and has to be tidied by hand. There is no account deletion either (even for an empty one).
+- **P2 — The account currency is a free 3-letter text field** with no list/ISO validation ("ZLO" is accepted). Recommendation: a select with common currencies plus the option to type a custom one.
+- **P2 — "Category" and "Owner" are free text** with no suggestions from existing values, which leads to drift ("Me", "me", "Dariusz").
+- **P2 — The single-valuation form requires typing the full value.** No "change by amount" mode (+500 / −200) and no previous value shown next to the field (the bulk form has it, this one does not).
+- **P2 — The "contribution" field is unexplained in the form** — the user does not know why to fill it in or how it affects reports (currently it is used nowhere in the UI except being displayed in history). The collected data brings no value until there is a "growth from contributions vs. from the market" report.
+- **P2 — The valuation history does not show the change between valuations** (delta, %), it is a raw list.
+- **P3 — After saving a valuation from the main screen the user lands on the account history**, not where they came from (the same `returnUrl` problem as in the budget).
 
-### Problemy
-- **P1 — Ceny surowców są martwą funkcją.** Tabela `commodity_prices` nie jest używana przez żadną funkcję SQL ani żaden widok poza własną listą. Użytkownik wprowadza cenę złota i nic z tego nie wynika (konto „metale szlachetne” nadal wymaga ręcznej wyceny w PLN). Albo podłączyć ją do wycen (ilość × cena), albo ukryć sekcję, żeby nie budziła fałszywych oczekiwań.
-- **P2 — Synchronizacja obejmuje tylko waluty, które już mają ręczny kurs** (`trackedCurrencies` wyliczane z istniejących kursów). Nowy użytkownik z kontem w EUR nie zobaczy przycisku synchronizacji, dopóki nie wpisze pierwszego kursu ręcznie. Lista walut do synchronizacji powinna wynikać z walut kont/holdingów/transakcji.
-- **P2 — Drugie kliknięcie „Synchronizuj” tego samego dnia kończy się błędem** (unikalność `household_id, currency, rate_date` + `insert` zamiast `upsert`), a komunikat mówi tylko „nie udało się pobrać kursów dla: EUR, USD”, co jest mylące.
-- **P2 — Brak automatycznego, cyklicznego pobierania kursów** (plan: post-MVP). Bez tego wartości w walucie bazowej dryfują między ręcznymi synchronizacjami, a oś czasu używa kursu „najnowszego na dany dzień” — przy rzadkich synchronizacjach historyczne miesiące są przeliczane starym kursem. Rozwiązanie: `pg_cron` + edge function pobierająca kursy dziennie dla walut używanych przez gospodarstwo, plus backfill historii przy dodaniu nowej waluty.
-- **P2 — Lista kursów to płaska lista wszystkich wpisów** (każda waluta × każda data). Po kilku miesiącach codziennych synchronizacji będzie miała setki pozycji. Powinna pokazywać jedną kartę per waluta (aktualny kurs, data, źródło) z rozwijaną historią i ewentualnie mini-wykresem.
-- **P2 — Wszystko jest „do PLN”, także gdy waluta bazowa to EUR.** Wpis „1 EUR = 4,30 PLN” obok „waluta bazowa: EUR” jest niezrozumiały dla użytkownika; UI powinno tłumaczyć na „1 USD = 0,92 EUR” (pivot przez PLN może zostać w bazie).
-- **P3 — Waluta bazowa i waluta kursu to pola tekstowe** bez listy ISO; można zapisać nieistniejący kod, a potem frankfurter zwróci błąd.
-- **P3 — Sekcja „Kursy” jest osobną pozycją w menu głównym.** Dla większości domowników to konfiguracja używana raz na jakiś czas; lepiej pod „Ustawienia gospodarstwa” razem z walutą bazową, członkami i (w przyszłości) eksportem.
+### Ergonomic problems — holdings (investment instruments)
+- **P1 — A holding's market value = the price of its last transaction.** `get_holding_positions` takes `latest_price` from the most recent buy/sell; a current market price cannot be entered without a fake transaction. As a result "unrealized gain" reflects only the difference between the last transaction price and the average cost of earlier buys — never actual market movement — so the indicator is stale and misleading. Needed: an instrument price table (date, price) — analogous to `commodity_prices` — and an "update prices" form similar to the bulk valuations.
+- **P1 — Holdings do not feed the account valuation.** The documentation says holdings are "additive" to the manual account valuation. In practice the user records an ETF purchase and separately has to update the brokerage account's value by hand, otherwise net worth does not move. Suggestion: an option "account value = sum of holdings + cash" or a "record valuation from positions" button.
+- **P2 — A holding cannot be edited, archived or deleted** (no service methods and no UI); a typo in the ticker stays forever.
+- **P2 — A sale does not compute realized gain** and there is no history of realized gains (relevant for tax, PIT-38).
+- **P2 — Holdings are available only for `investment` accounts**; `precious_metals` (ounces of gold) or `currency` (foreign cash) accounts cannot have quantity positions, even though a `commodity_prices` table exists.
+- **P3 — The total value of holdings is not shown** on the account page (only per position), nor compared with the manual account valuation.
 
-## 5. Gospodarstwo domowe, logowanie, onboarding
+## 4. Exchange rates and commodity prices
 
-Źródła: `src/app/features/auth/**`, `src/app/features/household/**`, `src/app/core/auth/**`, `src/app/core/household/**`
+Sources: `src/app/features/rates/**`, `src/app/core/rates/**`, migration `20260705010000_multi_currency_rates.sql`
 
-### Co działa dobrze
-- Zaproszenia linkiem z rolą, `returnUrl` przez logowanie/rejestrację, kopiowanie linku, odwoływanie zaproszeń, zmiana ról.
-- Guardy prowadzą nowego użytkownika prosto do utworzenia gospodarstwa.
+### What works well
+- Fetching rates from frankfurter.dev with one button; rates stored with date and source.
+- The household base currency editable by the owner; a missing rate does not produce a wrong number (`null` + warning).
+- Permissions (owner/editor/viewer) correctly reflected in this page's UI.
 
-### Problemy
-- **P1 — Uprawnienia ról nie są odzwierciedlone w UI poza stroną kursów i usuwaniem koperty.** `viewer` widzi wszystkie przyciski „Zapisz transakcję”, „Nowa koperta”, „Dodaj wycenę”, wypełnia formularz i dopiero po zapisie dostaje surowy błąd RLS z Postgresa („new row violates row-level security policy”). `currentRole()` jest wyliczane dopiero po `loadMembers()`, które wywołują tylko 3 ekrany. Rola powinna być ładowana raz przy starcie (np. w `householdGuard`) i używana do ukrywania/wyłączania akcji zapisu.
-- **P1 — Brak resetu hasła** („Nie pamiętam hasła”) ani zmiany hasła/e-maila po zalogowaniu. Dla aplikacji z prawdziwymi danymi finansowymi to blokujące — zapomniane hasło = utrata dostępu.
-- **P2 — Brak przełącznika gospodarstw** (patrz sekcja 1). `selectHousehold` istnieje w serwisie, brakuje wyłącznie UI. Osoba zaproszona do drugiego gospodarstwa po akceptacji zostaje w nie przełączona i nie ma jak wrócić do własnego.
-- **P2 — Nie da się zmienić nazwy gospodarstwa** ani go usunąć/opuścić. Właściciel nie może przekazać własności; brak zabezpieczenia w UI przed usunięciem/degradacją ostatniego właściciela (możliwe, że pilnuje tego SQL — nie weryfikowałem wszystkich polityk).
-- **P2 — Członkowie identyfikowani wyłącznie e-mailem.** Brak nazwy wyświetlanej/awataru; w historii operacji nie widać, kto co wpisał (`created_by` nieużywane w UI).
-- **P2 — Rejestracja publiczna jest otwarta** (zapisane w feature-map jako do zrobienia). Dla narzędzia domowego z jawnym adresem produkcyjnym to ryzyko (spam kont). Do rozważenia: rejestracja tylko z linkiem zaproszenia lub lista dozwolonych e-maili.
-- **P2 — Ekran logowania/rejestracji nie ma przełącznika języka** i jest po polsku domyślnie (`defaultLang: 'pl'` z localStorage) bez możliwości zmiany przed zalogowaniem; `<html lang="en">` jest sztywne i nie zmienia się z językiem (czytniki ekranu czytają polski tekst angielskim głosem).
-- **P2 — Pole hasła bez przycisku „pokaż hasło”** i bez wskaźnika wymagań (min. 6 znaków dowiaduje się z komunikatu błędu).
-- **P3 — Po rejestracji z włączonym potwierdzeniem e-mail** użytkownik widzi tylko komunikat „sprawdź skrzynkę”, bez przycisku „wyślij ponownie” ani linku do logowania z zachowanym `returnUrl`.
-- **P3 — Zaproszenia bez wysyłki e-mail** (brak SMTP) — udokumentowane. Warto choć dodać przycisk „Udostępnij” (Web Share API) na telefonie.
-- **P3 — Onboarding kończy się na nazwie gospodarstwa.** Po utworzeniu użytkownik ląduje na pustym dashboardzie i musi sam odkryć, że ma założyć koperty. Kreator (nazwa → waluta bazowa → startowy zestaw kopert → pierwsze zasilenie) skróciłby czas do pierwszej wartości.
+### Problems
+- **P1 — Commodity prices are a dead feature.** The `commodity_prices` table is not used by any SQL function or any view except its own list. The user enters a gold price and nothing follows (a "precious metals" account still needs a manual valuation in PLN). Either wire it into valuations (quantity × price) or hide the section so it does not raise false expectations.
+- **P2 — Sync covers only currencies that already have a manual rate** (`trackedCurrencies` derived from existing rates). A new user with a EUR account will not see the sync button until they enter the first rate by hand. The list of currencies to sync should come from the currencies of accounts/holdings/transactions.
+- **P2 — A second "Sync" click on the same day fails** (uniqueness on `household_id, currency, rate_date` + `insert` instead of `upsert`), and the message only says "failed to fetch rates for: EUR, USD", which is misleading.
+- **P2 — No automatic, scheduled rate fetching** (plan: post-MVP). Without it base-currency values drift between manual syncs, and the timeline uses the "latest rate as of the day" — with infrequent syncs historical months are converted at an old rate. Solution: `pg_cron` + an edge function fetching daily rates for the household's currencies, plus a history backfill when a new currency is added.
+- **P2 — The rate list is a flat list of all entries** (every currency × every date). After a few months of daily syncs it will have hundreds of items. It should show one card per currency (current rate, date, source) with an expandable history and possibly a mini chart.
+- **P2 — Everything is "to PLN", even when the base currency is EUR.** The entry "1 EUR = 4.30 PLN" next to "base currency: EUR" is incomprehensible to the user; the UI should translate to "1 USD = 0.92 EUR" (the PLN pivot can stay in the database).
+- **P3 — The base currency and the rate currency are text fields** with no ISO list; a non-existent code can be saved, and frankfurter then returns an error.
+- **P3 — "Rates" is a separate item in the main menu.** For most household members it is configuration used occasionally; better under "Household settings" together with the base currency, members and (in future) export.
 
-## 6. Spójność UI, dostępność, i18n, jakość techniczna widoczna dla użytkownika
+## 5. Household, sign-in, onboarding
 
-### Formatowanie liczb i dat
-- **P1 — Brak rejestracji polskiej lokalizacji Angulara.** W `app.config.ts`/`main.ts` nie ma `registerLocaleData(localePl)` ani `LOCALE_ID`. Wszystkie `| number` i `| date` renderują po angielsku niezależnie od wybranego języka: „1,234.56 PLN” zamiast „1 234,56 zł”, „Sep 11, 2026” zamiast „11 wrz 2026”. Tylko nagłówki miesięcy (`toLocaleDateString` z `localeTag`) są po polsku — efekt jest niespójny na jednym ekranie. Poprawka: dynamiczne `LOCALE_ID` lub własne pipe'y oparte na `Intl` z `language.localeTag()`.
-- **P2 — Brak pipe'a walutowego.** Kwoty składane są ręcznie jako `{{ x | number }} {{ currency }}` w ~20 miejscach; brak formatowania w stylu `Intl.NumberFormat(..., { style: 'currency' })`, brak wyrównania tabelarycznego (`tabular-nums` tylko w tabelach), różna precyzja (`1.2-2`, `1.0-0`, `1.2-4`, `1.0-6`) bez uzasadnienia dla użytkownika.
-- **P2 — Ujemne kwoty tylko przez kolor (`text-destructive`)** — nie spełnia WCAG 1.4.1 (informacja tylko kolorem); warto dodać znak/ikonę i wyraźne „−”.
+Sources: `src/app/features/auth/**`, `src/app/features/household/**`, `src/app/core/auth/**`, `src/app/core/household/**`
 
-### Spójność wzorców
-- **P2 — Trzy różne układy stron:** listy (pełna szerokość, nagłówek + karty), formularze (wyśrodkowany `min-h-svh` w wąskiej karcie), zbiorcze wyceny (pełna szerokość z „Wróć”). Formularze wyglądają jak ekrany logowania, choć są wewnątrz aplikacji.
-- **P2 — Dublowany kod w każdym komponencie:** `toDateInputValue`, `startOfMonth`, `endOfMonth`, `extractMessage`, przełącznik miesiąca, `LIQUIDITY_CLASSES`, `ACCOUNT_TYPES`. Nie jest to problem użytkownika bezpośrednio, ale zwiększa ryzyko niespójności (już widoczne: różne parsowanie dat).
-- **P2 — Brak globalnych powiadomień (toast).** Po zapisie nie ma potwierdzenia „Zapisano transakcję”, po błędzie ładowania listy komunikat jest wyłącznie w miejscu, gdzie akurat jest `hlmAlert`. Sukces sygnalizuje wyłącznie przekierowanie.
-- **P2 — Komunikaty błędów z Supabase pokazywane 1:1** (`error.message`), np. „duplicate key value violates unique constraint …”, „JSON object requested, multiple (or no) rows returned”. Powinny być mapowane na zrozumiałe teksty (i tłumaczone).
-- **P3 — `window.confirm` w 8 miejscach** zamiast `hlm-alert-dialog` (dostępny w katalogu spartan).
-- **P3 — Brak stanów ładowania typu skeleton**; zamiast tego tekst „Ładowanie…”, przez co układ „skacze” po załadowaniu.
-- **P3 — Motyw ciemny jest zdefiniowany w `styles.scss` (`:root.dark`), ale nic go nie włącza** — brak przełącznika i brak reakcji na `prefers-color-scheme`.
+### What works well
+- Invites by link with a role, `returnUrl` through sign-in/registration, link copying, invite revocation, role changes.
+- Guards lead a new user straight to household creation.
 
-### Dostępność
-- **P2 — Nietłumaczone `aria-label`** („Previous month”, „Next month”, „Language”, „Menu”, „Previous 12 months”).
-- **P2 — Błędy walidacji nie są powiązane z polem** (`aria-describedby`/`aria-invalid`), a selecty spartan sterowane sygnałami nie są w `FormGroup`, więc nie dostają stanu `invalid`. Błąd „Wybierz kopertę” pojawia się tylko wizualnie po submit.
-- **P2 — Focus po nawigacji** nie jest przenoszony na nagłówek strony; po przejściu do formularza czytnik ekranu zostaje na przycisku menu.
-- **P3 — Przyciski `‹`/`›` (encje HTML)** jako jedyna treść — działa z aria-label, ale ikony lucide byłyby czytelniejsze i spójne z hamburgerem.
-- Audyt AXE nie był wykonany (feature-map). Do zrobienia z uruchomioną aplikacją.
+### Problems
+- **P1 — Role permissions are not reflected in the UI outside the rates page and envelope deletion.** A `viewer` sees all the "Record transaction", "New envelope", "Add valuation" buttons, fills in the form and only after saving gets a raw Postgres RLS error ("new row violates row-level security policy"). `currentRole()` is only computed after `loadMembers()`, which only 3 screens call. The role should be loaded once at start-up (e.g. in `householdGuard`) and used to hide/disable write actions.
+- **P1 — No password reset** ("Forgot password") and no password/e-mail change after signing in. For an app with real financial data this is blocking — a forgotten password = loss of access.
+- **P2 — No household switcher** (see section 1). `selectHousehold` exists in the service; only the UI is missing. A person invited to a second household is switched into it on acceptance and has no way back to their own.
+- **P2 — The household cannot be renamed**, deleted or left. The owner cannot transfer ownership; there is no UI safeguard against removing/demoting the last owner (SQL may enforce this — I did not verify every policy).
+- **P2 — Members are identified by e-mail only.** No display name/avatar; the operation history does not show who entered what (`created_by` unused in the UI).
+- **P2 — Public registration is open** (noted in the feature map as to-do). For a household tool with a public production address this is a risk (spam accounts). Consider registration only via an invite link or an allow-list of e-mails.
+- **P2 — The sign-in/registration screens have no language switcher** and default to Polish (`defaultLang: 'pl'` from localStorage) with no way to change it before signing in; `<html lang="en">` is fixed and does not follow the language (screen readers read Polish text with an English voice).
+- **P2 — The password field has no "show password" toggle** and no requirements hint (the 6-character minimum is only learned from the error message).
+- **P3 — After registration with e-mail confirmation enabled** the user sees only a "check your inbox" message, without a "resend" button or a sign-in link that keeps `returnUrl`.
+- **P3 — Invites are not e-mailed** (no SMTP) — documented. At least a "Share" button (Web Share API) on the phone would help.
+- **P3 — Onboarding ends at the household name.** After creation the user lands on an empty dashboard and has to discover on their own that envelopes must be created. A wizard (name → base currency → starter envelope set → first funding) would shorten time to first value.
+
+## 6. UI consistency, accessibility, i18n, user-visible technical quality
+
+### Number and date formatting
+- **P1 — Angular's Polish locale is not registered.** There is no `registerLocaleData(localePl)` and no `LOCALE_ID` in `app.config.ts`/`main.ts`. Every `| number` and `| date` renders in English regardless of the chosen language: "1,234.56 PLN" instead of "1 234,56 zł", "Sep 11, 2026" instead of "11 wrz 2026". Only the month headings (`toLocaleDateString` with `localeTag`) are Polish — the effect is inconsistent on a single screen. Fix: a dynamic `LOCALE_ID` or custom pipes based on `Intl` with `language.localeTag()`.
+- **P2 — No currency pipe.** Amounts are assembled by hand as `{{ x | number }} {{ currency }}` in ~20 places; no `Intl.NumberFormat(..., { style: 'currency' })` formatting, no tabular alignment (`tabular-nums` only in tables), differing precision (`1.2-2`, `1.0-0`, `1.2-4`, `1.0-6`) with no rationale visible to the user.
+- **P3 — Negative amounts are highlighted with colour (`text-destructive`) on top of the minus sign** rendered by `DecimalPipe`, so the sign is not conveyed by colour alone. The colour is a redundant cue and fine as such; for consistency consider the same treatment (sign + colour) in every list, including rows where the sign is deliberately dropped (amortized payments shown budget-neutral), with a label instead.
+
+### Consistency of patterns
+- **P2 — Three different page layouts:** lists (full width, heading + cards), forms (centred `min-h-svh` in a narrow card), bulk valuations (full width with "Back"). Forms look like sign-in screens even though they are inside the app.
+- **P2 — Duplicated code in every component:** `toDateInputValue`, `startOfMonth`, `endOfMonth`, `extractMessage`, the month switcher, `LIQUIDITY_CLASSES`, `ACCOUNT_TYPES`. Not a direct user problem, but it raises the risk of inconsistency (already visible: different date parsing).
+- **P2 — No global notifications (toast).** After saving there is no "Transaction saved" confirmation; after a list-loading error the message appears only where an `hlmAlert` happens to be. Success is signalled solely by the redirect.
+- **P2 — Supabase error messages are shown verbatim** (`error.message`), e.g. "duplicate key value violates unique constraint …", "JSON object requested, multiple (or no) rows returned". They should be mapped to understandable (and translated) texts.
+- **P3 — `window.confirm` in 8 places** instead of `hlm-alert-dialog` (available in the spartan catalogue).
+- **P3 — No skeleton loading states**; instead a "Loading…" text, so the layout "jumps" after loading.
+
+### Accessibility
+- **P2 — Untranslated `aria-label`s** ("Previous month", "Next month", "Language", "Menu", "Previous 12 months").
+- **P2 — Validation errors are not linked to the field** (`aria-describedby`/`aria-invalid`), and signal-driven spartan selects are not in the `FormGroup`, so they never get an `invalid` state. The "Choose an envelope" error appears only visually after submit.
+- **P2 — Focus after navigation** is not moved to the page heading; after navigating to a form a screen reader stays on the menu button.
+- **P3 — The `‹`/`›` buttons (HTML entities)** as the only content — works with aria-label, but lucide icons would be more readable and consistent with the hamburger.
+- An AXE audit has not been performed (feature map). To be done with the app running.
 
 ### i18n
-- Pliki `en.json`/`pl.json` mają identyczny zestaw 485 kluczy, brak brakujących tłumaczeń — dobrze.
-- **P2 — Parametr `{{kind}}` w potwierdzeniu usunięcia** dostaje surową wartość `transaction`/`transfer`, więc polski użytkownik czyta „Usunąć tę operację (transaction)?”.
-- **P3 — Nazwy typów kont/płynności są tłumaczone, ale wolnotekstowa „kategoria” i „właściciel” nie** — zgodnie z oczekiwaniem, tylko warto to zaznaczyć w formularzu.
-- **P3 — Tytuł zakładki „PersonalFinancePlanner”** (CamelCase) i brak `<meta name="description">`.
+- `en.json`/`pl.json` have an identical set of 485 keys, no missing translations — good.
+- **P2 — The `{{kind}}` parameter in the delete confirmation** receives the raw value `transaction`/`transfer`, so a Polish user reads "Usunąć tę operację (transaction)?".
+- **P3 — Account type and liquidity names are translated, but the free-text "category" and "owner" are not** — as expected, but worth noting in the form.
+- **P3 — The tab title "PersonalFinancePlanner"** (CamelCase) and no `<meta name="description">`.
 
 ### Mobile / PWA
-- Układ responsywny jest poprawny (grid 1/2/3 kolumny, hamburger), ale:
-- **P2 — Brak PWA** (manifest, ikona, service worker) — plan post-MVP; na telefonie nie da się „zainstalować”, a to główny scenariusz wpisywania wydatków na bieżąco.
-- **P2 — Brak trybu offline / kolejki zapisu** — w sklepie bez zasięgu zapis się nie powiedzie i użytkownik musi pamiętać o ponownym wpisaniu.
-- **P3 — Wysokie karty z przyciskami w stopce** wymagają dużo przewijania na telefonie; lista zwarta (jedna linia = koperta + saldo) sprawdziłaby się lepiej na małym ekranie.
+- The responsive layout is correct (1/2/3-column grid, hamburger), but:
+- **P2 — No PWA** (manifest, icon, service worker) — plan post-MVP; the app cannot be "installed" on a phone, and that is the main scenario for entering expenses on the go.
+- **P2 — No offline mode / write queue** — in a shop without coverage the save fails and the user has to remember to re-enter it.
+- **P3 — Tall cards with footer buttons** require a lot of scrolling on a phone; a compact list (one line = envelope + balance) would work better on a small screen.
 
-## 7. Brakujące funkcje — propozycje
+## 7. Missing features — proposals
 
-Podział na: (A) funkcje, których brak najbardziej boli dziś, (B) funkcje znacząco podnoszące użyteczność, (C) dalsze pomysły. W nawiasach odniesienie do planu (`docs/project-assumptions-and-plan.md`) tam, gdzie funkcja jest już przewidziana.
+Grouped as: (A) features whose absence hurts most today, (B) features that significantly raise usefulness, (C) further ideas. Parentheses reference the plan (`docs/project-assumptions-and-plan.md`) where a feature is already foreseen.
 
-### A. Do zrobienia w pierwszej kolejności (domykają MVP z planu)
-1. **Dashboard z realnymi wskaźnikami** (MVP pkt 11): saldo wszystkich kopert, wydatki i wpływy bieżącego miesiąca vs. poprzedni, 3–5 kopert najbliżej zera/na minusie, majątek netto + zmiana m/m, lista kont z przeterminowaną wyceną, reguły cykliczne do wykonania w tym tygodniu, ostatnie 5 operacji, skrót „dodaj wydatek”.
-2. **Szybkie dodawanie wydatku** z każdego ekranu (dialog/panel boczny lub stały przycisk), z „zapisz i dodaj kolejny”, domyślną datą = ostatnio użyta, kopertą z podpowiedzi nazwy. Do rozważenia skrót klawiaturowy (`n`).
-3. **Eksport danych** (MVP pkt 12): CSV/XLSX per tabela (transakcje, transfery, wyceny, holdingi, kursy) i pełny eksport JSON gospodarstwa; najprościej jako funkcja SQL zwracająca JSON + pobranie w przeglądarce.
-4. **Edycja i usuwanie kont majątkowych oraz holdingów** (patrz sekcja 3).
-5. **Reset hasła i zmiana hasła** (Supabase Auth ma to gotowe: `resetPasswordForEmail`, `updateUser`).
-6. **Wskaźnik i przełącznik gospodarstwa** w nagłówku + zmiana nazwy gospodarstwa.
-7. **Egzekwowanie ról w UI** — ukrywanie/wyłączanie akcji zapisu dla `viewer`, rola ładowana przy starcie.
-8. **Polska lokalizacja liczb i dat** (`registerLocaleData`) i wspólny pipe kwoty z walutą.
+### A. First priority (they close the MVP from the plan)
+1. **A dashboard with real indicators** (MVP item 11): balance of all envelopes, this month's spending and income vs. the previous month, the 3–5 envelopes closest to zero / in the red, net worth + month-over-month change, a list of accounts with stale valuations, recurring rules due this week, the last 5 operations, an "add expense" shortcut.
+2. **Quick expense entry** from every screen (dialog/side panel or a persistent button), with "save and add another", default date = last used, envelope from the name suggestion. Consider a keyboard shortcut (`n`).
+3. **Data export** (MVP item 12): CSV/XLSX per table (transactions, transfers, valuations, holdings, rates) and a full JSON export of the household; simplest as an SQL function returning JSON + download in the browser.
+4. **Editing and deleting asset accounts and holdings** (see section 3).
+5. **Password reset and change** (Supabase Auth has it ready: `resetPasswordForEmail`, `updateUser`).
+6. **Household indicator and switcher** in the header + renaming the household.
+7. **Role enforcement in the UI** — hiding/disabling write actions for `viewer`, role loaded at start-up.
+8. **Polish number and date localization** (`registerLocaleData`) and a shared amount-with-currency pipe.
 
-### B. Znacząco podnoszą użyteczność
-9. **Cele/limity kopert (budżet miesięczny per koperta).** Kwota planowana miesięcznie per koperta; karta koperty pokazuje „wydano 430 / 600 zł” z paskiem postępu, a zbiorcze zasilanie ma przycisk „zasil wg planu”. To jedna z najbardziej brakujących rzeczy w stosunku do GoodBudget (inspiracja z planu). Wymaga tylko kolumny `monthly_target` w `envelopes`.
-10. **Pula „do rozdysponowania” (dochód niezaalokowany).** Dochód gospodarstwa wpływa do puli, a zasilenie kopert = transfer z puli; suma zasileń > dochód jest widoczna od razu. Można to zrealizować bez zmiany schematu jako specjalna koperta systemowa „Nieprzydzielone” + widok.
-11. **Wyszukiwarka i filtry historii** (tekst, koperta, typ, zakres dat, kwota, autor) + sumy wpływów/wydatków nad listą + eksport wyniku. Zakres dat zamiast sztywnego miesiąca.
-12. **Raporty i wykresy** (plan 3.5): wydatki per koperta w miesiącu (słupki/donut), trend wydatków 12 mies., wpływy vs. wydatki, majątek netto w czasie (linia), alokacja majątku (donut per typ/płynność), przyrost majątku z wpłat vs. z rynku (`contribution_amount` wreszcie użyte).
-13. **Ceny instrumentów (holdingi) i cen surowców podpięte do wycen**: tabela `holding_prices`, zbiorczy formularz „aktualizuj ceny”, automatyczny import kursów ETF/akcji (np. stooq/yahoo) jako post-MVP; wartość konta inwestycyjnego wyliczana z pozycji.
-14. **Zysk zrealizowany** przy sprzedaży (FIFO lub średnia) + roczne zestawienie do PIT-38.
-15. **Automatyczne kursy walut** (`pg_cron` + edge function frankfurter), backfill historii dla nowej waluty, upsert zamiast insert.
-16. **Reguły cykliczne: częstotliwość** (tygodniowa, co N miesięcy, roczna), data startu/końca, podgląd nadchodzących wykonań, uruchamianie serwerowe (`pg_cron`) zamiast przy wejściu na stronę + powiadomienie „zaksięgowano”.
-17. **Sortowanie i grupowanie kopert** (ręczna kolejność, grupy „Stałe / Zmienne / Cele”, ikona/kolor koperty), wybór widoku karty/lista.
-18. **Notatka, tagi i załącznik (paragon) do transakcji**; kategorie niezależne od kopert do raportowania (np. koperta „Dom”, kategoria „Media”).
-19. **Konto źródłowe wydatku** — powiązanie transakcji budżetowej z kontem majątkowym (bank/gotówka/karta), co pozwoli uzgadniać saldo konta bankowego ze stanem kopert (dziś budżet i majątek są dwoma niezależnymi światami).
-20. **Import transakcji z CSV banku** (mapowanie kolumn, deduplikacja, podpowiadanie koperty na podstawie historii nazw) — największy skrót w codziennym użyciu.
-21. **PWA + tryb offline z kolejką zapisów** (plan post-MVP), skrót na ekranie głównym telefonu.
-22. **Toasty i dialogi** (spartan `sonner`/`alert-dialog`), mapowanie błędów Supabase na komunikaty, `returnUrl` po edycji.
-23. **Dziennik zmian (audit log)** — plan post-MVP; przy współdzieleniu z domownikami „kto i kiedy zmienił kwotę” jest istotne. Minimalna wersja: `updated_by/updated_at` na tabelach + widok „ostatnie zmiany”.
+### B. Significantly raise usefulness
+9. **Envelope targets/limits (monthly budget per envelope).** A planned monthly amount per envelope; the envelope card shows "spent 430 / 600 zł" with a progress bar, and bulk funding gets a "fund according to plan" button. One of the most missed things compared with GoodBudget (the plan's inspiration). Needs only a `monthly_target` column in `envelopes`.
+10. **A "to be assigned" pool (unallocated income).** Household income lands in a pool and funding envelopes = a transfer from the pool; a sum of top-ups > income is visible immediately. Doable without a schema change as a special system envelope "Unassigned" + a view.
+11. **History search and filters** (text, envelope, type, date range, amount, author) + income/spend totals above the list + export of the result. A date range instead of a fixed month.
+12. **Reports and charts** (plan 3.5): spending per envelope in the month (bars/donut), 12-month spending trend, income vs. spending, net worth over time (line), asset allocation (donut per type/liquidity), net worth growth from contributions vs. from the market (`contribution_amount` finally used).
+13. **Instrument prices (holdings) and commodity prices wired into valuations**: a `holding_prices` table, a bulk "update prices" form, automatic ETF/stock price import (e.g. stooq/yahoo) as post-MVP; investment account value derived from positions.
+14. **Realized gain** on sale (FIFO or average) + an annual statement for PIT-38.
+15. **Automatic exchange rates** (`pg_cron` + a frankfurter edge function), history backfill for a new currency, upsert instead of insert.
+16. **Recurring rules: frequency** (weekly, every N months, yearly), start/end date, preview of upcoming runs, server-side execution (`pg_cron`) instead of on page load + a "posted" notification.
+17. **Envelope sorting and grouping** (manual order, groups "Fixed / Variable / Goals", envelope icon/colour), card/list view choice.
+18. **Note, tags and attachment (receipt) on a transaction**; categories independent of envelopes for reporting (e.g. envelope "Home", category "Utilities").
+19. **Source account of an expense** — linking a budget transaction to an asset account (bank/cash/card), which allows reconciling the bank balance with the envelope state (today budget and net worth are two independent worlds).
+20. **Transaction import from a bank CSV** (column mapping, deduplication, envelope suggestion based on name history) — the biggest shortcut in daily use.
+21. **PWA + offline mode with a write queue** (plan post-MVP), a home-screen shortcut on the phone.
+22. **Toasts and dialogs** (spartan `sonner`/`alert-dialog`), mapping Supabase errors to messages, `returnUrl` after editing.
+23. **Change log (audit log)** — plan post-MVP; when sharing with household members "who changed the amount and when" matters. Minimal version: `updated_by/updated_at` on tables + a "recent changes" view.
 
-### C. Dalsze pomysły
-24. Cele oszczędnościowe z datą i prognozą („odkładając 500 zł/mies. osiągniesz 20 000 zł w marcu 2028”).
-25. Prognoza cash-flow na koniec miesiąca (saldo kopert − nadchodzące reguły).
-26. Powiadomienia (e-mail/push) o kopercie na minusie, wycenie do aktualizacji, regule do potwierdzenia.
-27. Widget/„skrót” na telefonie (Web Share Target, aby przesłać zdjęcie paragonu do aplikacji).
-28. Warstwa API/eksport dla analizy LLM (plan 3.5) — np. widok SQL read-only + klucz per gospodarstwo.
-29. Podział wydatku między koperty (split) i wydatki wspólne/zwroty między domownikami.
-30. Archiwum lat: roczne podsumowanie (ile wydano per koperta w 2025 vs 2024).
+### C. Further ideas
+24. Savings goals with a date and forecast ("saving 500 zł/month you will reach 20,000 zł in March 2028").
+25. End-of-month cash-flow forecast (envelope balances − upcoming rules).
+26. Notifications (e-mail/push) about an envelope in the red, a valuation to update, a rule to confirm.
+27. A phone "share target" (Web Share Target, to send a receipt photo to the app).
+28. An API layer / export for LLM analysis (plan 3.5) — e.g. a read-only SQL view + a key per household.
+29. Splitting an expense between envelopes and shared expenses/refunds between household members.
+30. Year archive: an annual summary (how much was spent per envelope in 2025 vs. 2024).
 
-### Proponowana kolejność wdrażania (moja rekomendacja)
-1. Lokalizacja liczb/dat + formularze (anuluj, returnUrl, zapisz i dodaj kolejny, kolejność pól) — małe zmiany, duży efekt.
-2. Dashboard ze wskaźnikami + cele kopert + pasek postępu na kartach.
-3. Edycja kont/holdingów, reset hasła, role w UI, przełącznik gospodarstwa.
-4. Filtry/wyszukiwanie historii + eksport CSV.
-5. Ceny holdingów i surowców podpięte do wycen; automatyczne kursy.
-6. Wykresy i raporty.
-7. PWA/offline, import CSV.
+### Suggested implementation order (my recommendation)
+1. Number/date localization + forms (cancel, returnUrl, save and add another, field order) — small changes, big effect.
+2. Dashboard with indicators + envelope targets + progress bar on cards.
+3. Editing accounts/holdings, password reset, roles in the UI, household switcher.
+4. History filters/search + CSV export.
+5. Holding and commodity prices wired into valuations; automatic rates.
+6. Charts and reports.
+7. PWA/offline, CSV import.
 
-## Zastrzeżenia
+## Caveats
 
-- Przegląd wykonano wyłącznie na podstawie kodu (szablony Angular, serwisy, migracje SQL, testy e2e). Aplikacja **nie była uruchamiana w przeglądarce** w tej sesji — nie było dostępnego stosu Supabase (Docker). Wnioski dotyczące wyglądu (np. wysokość formularzy `min-h-svh`, zawijanie paska akcji) są wnioskami z klas CSS, nie z obserwacji; warto je potwierdzić wizualnie.
-- Nie weryfikowałem wszystkich polityk RLS pod kątem przypadków brzegowych (np. ochrona ostatniego właściciela) — tam, gdzie piszę „możliwe, że pilnuje tego SQL”, to jest przypuszczenie.
-- Audyt dostępności (AXE) i test na czytniku ekranu wymagają uruchomionej aplikacji — uwagi w sekcji 6 pochodzą z analizy znaczników.
-- Ocena „co boli najbardziej” jest moją interpretacją opartą na typowych scenariuszach użycia budżetu domowego (codzienne wpisywanie wydatków, comiesięczne zasilenie kopert i aktualizacja wycen); rzeczywiste priorytety zależą od tego, jak gospodarstwo faktycznie korzysta z narzędzia.
-- Zgodnie z `AGENTS.md` dokumentacja projektu ma być po angielsku; ten plik jest po polsku, bo tak sformułowano zlecenie przeglądu. Jeśli ma zostać w `docs/` na stałe, warto go przetłumaczyć lub przenieść poza katalog dokumentacji projektowej.
+- The review was done solely from the code (Angular templates, services, SQL migrations, e2e tests). The app **was not run in a browser** in this session — no Supabase stack (Docker) was available. Conclusions about appearance (e.g. the `min-h-svh` form height, action-bar wrapping) are inferred from CSS classes, not observed; they are worth confirming visually.
+- Not every RLS policy was verified for edge cases (e.g. protecting the last owner) — where I write "SQL may enforce this", it is an assumption.
+- An accessibility audit (AXE) and a screen-reader test require the running app — the remarks in section 6 come from markup analysis.
+- The judgement of "what hurts most" is my interpretation based on typical household-budget usage scenarios (daily expense entry, monthly envelope funding and valuation updates); the real priorities depend on how the household actually uses the tool.
