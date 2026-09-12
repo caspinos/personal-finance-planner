@@ -47,10 +47,21 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   invites; non-owners see a read-only member list. `authGuard` now carries a
   `returnUrl` through login/register so an invite link works for logged-out
   or brand-new users. Covered by `e2e/household.spec.ts`.
-- ⬜ Switching between multiple households in the UI (service supports
-  tracking a "current household", and a user can now belong to more than one
-  via invites, but there's still no household switcher UI -- joining a
-  second household while already belonging to one has no way to select it)
+- ✅ Switching between multiple households in the UI: the shell header shows
+  the active household (a `<select>` switcher once there is more than one,
+  plain text otherwise) and a "new household" action, so `/household/create`
+  is reachable beyond the first-run redirect. `HouseholdService.switchHousehold`
+  stores the pick and reloads the app at `/` -- feature components fetch in
+  their constructor and the budget/net-worth/rates services cache per
+  household in root signals, so a reload is what keeps the previous
+  household's data off the screen. The create page adapts once the account
+  has a household: it lists the existing ones, warns (without blocking) when
+  the name is already taken, and offers a way back out. Covered by
+  `e2e/households.spec.ts`.
+- ✅ A stored current-household id that no longer resolves (household left,
+  removed, or deleted) is dropped on load instead of silently beating the
+  fallback and rendering an empty app. Covered by
+  `src/app/core/household/household.service.spec.ts`.
 - ⬜ Audit log for membership/role changes
 - ⬜ Disabling public self-registration (anyone can still sign up via the
   public Register page in addition to using an invite link)

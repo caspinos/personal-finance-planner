@@ -1,18 +1,19 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
 
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { TranslocoModule } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideMenu, lucideX } from '@ng-icons/lucide';
+import { lucideMenu, lucidePlus, lucideX } from '@ng-icons/lucide';
 
 import { AuthService } from '../../core/auth/auth.service';
+import { HouseholdService } from '../../core/household/household.service';
 import { LanguageService } from '../../core/i18n/language.service';
 
 @Component({
   selector: 'app-shell',
   imports: [RouterOutlet, RouterLink, HlmButtonImports, TranslocoModule, NgIcon],
-  providers: [provideIcons({ lucideMenu, lucideX })],
+  providers: [provideIcons({ lucideMenu, lucidePlus, lucideX })],
   template: `
     <div class="bg-background text-foreground flex min-h-svh flex-col">
       <header class="border-border border-b">
@@ -31,8 +32,36 @@ import { LanguageService } from '../../core/i18n/language.service';
             }}</a>
           </nav>
 
+          <div class="ml-auto hidden items-center gap-2 sm:flex">
+            @if (households.hasMultipleHouseholds()) {
+              <select
+                class="border-input bg-background rounded-md border px-2 py-1 text-sm"
+                [attr.aria-label]="'shell.household' | transloco"
+                (change)="onHouseholdChange($event)"
+              >
+                @for (household of households.households(); track household.id) {
+                  <option [value]="household.id" [selected]="household.id === currentHouseholdId()">
+                    {{ household.name }}
+                  </option>
+                }
+              </select>
+            } @else if (households.currentHousehold(); as household) {
+              <span class="text-muted-foreground text-sm">{{ household.name }}</span>
+            }
+            <a
+              hlmBtn
+              variant="ghost"
+              size="sm"
+              routerLink="/household/create"
+              [attr.aria-label]="'shell.newHousehold' | transloco"
+              [title]="'shell.newHousehold' | transloco"
+            >
+              <ng-icon name="lucidePlus" size="16" />
+            </a>
+          </div>
+
           <select
-            class="border-input bg-background ml-auto hidden rounded-md border px-2 py-1 text-sm sm:ml-auto sm:block"
+            class="border-input bg-background hidden rounded-md border px-2 py-1 text-sm sm:block"
             (change)="onLanguageChange($event)"
             aria-label="Language"
           >
@@ -106,6 +135,32 @@ import { LanguageService } from '../../core/i18n/language.service';
                 >{{ 'shell.nav.household' | transloco }}</a
               >
             </nav>
+
+            @if (households.hasMultipleHouseholds()) {
+              <select
+                class="border-input bg-background rounded-md border px-2 py-1 text-sm"
+                [attr.aria-label]="'shell.household' | transloco"
+                (change)="onHouseholdChange($event)"
+              >
+                @for (household of households.households(); track household.id) {
+                  <option [value]="household.id" [selected]="household.id === currentHouseholdId()">
+                    {{ household.name }}
+                  </option>
+                }
+              </select>
+            } @else if (households.currentHousehold(); as household) {
+              <span class="text-muted-foreground text-sm">{{ household.name }}</span>
+            }
+            <a
+              hlmBtn
+              variant="ghost"
+              size="sm"
+              class="justify-start"
+              routerLink="/household/create"
+              (click)="closeMobileMenu()"
+              >{{ 'shell.newHousehold' | transloco }}</a
+            >
+
             <select
               class="border-input bg-background rounded-md border px-2 py-1 text-sm"
               (change)="onLanguageChange($event)"
@@ -135,10 +190,14 @@ import { LanguageService } from '../../core/i18n/language.service';
 })
 export class Shell {
   protected readonly auth = inject(AuthService);
+  protected readonly households = inject(HouseholdService);
   protected readonly language = inject(LanguageService);
   private readonly router = inject(Router);
 
   protected readonly mobileMenuOpen = signal(false);
+  protected readonly currentHouseholdId = computed(
+    () => this.households.currentHousehold()?.id ?? null,
+  );
 
   protected toggleMobileMenu(): void {
     this.mobileMenuOpen.update((open) => !open);
@@ -146,6 +205,13 @@ export class Shell {
 
   protected closeMobileMenu(): void {
     this.mobileMenuOpen.set(false);
+  }
+
+  protected onHouseholdChange(event: Event): void {
+    const householdId = (event.target as HTMLSelectElement).value;
+    if (householdId !== this.currentHouseholdId()) {
+      this.households.switchHousehold(householdId);
+    }
   }
 
   protected onLanguageChange(event: Event): void {

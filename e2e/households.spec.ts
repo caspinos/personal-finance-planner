@@ -1,0 +1,75 @@
+import { expect, test, type Locator } from '@playwright/test';
+
+import { createHousehold, signUpWithHousehold } from './support/auth';
+import { createEnvelope } from './support/budget';
+
+/** Picks a household in the header switcher by its visible name. */
+async function switchTo(switcher: Locator, householdName: string): Promise<void> {
+  const value = await switcher
+    .locator('option')
+    .filter({ hasText: householdName })
+    .getAttribute('value');
+  if (!value) {
+    throw new Error(`No option for household "${householdName}" in the switcher.`);
+  }
+  await switcher.selectOption(value);
+}
+
+test.describe('Multiple households', () => {
+  test('creates a second household, switches back, and keeps their data apart', async ({
+    page,
+  }) => {
+    const suffix = Date.now();
+    const first = `Alpha ${suffix}`;
+    const second = `Beta ${suffix}`;
+
+    await signUpWithHousehold(page, { emailPrefix: 'multi', householdName: first });
+
+    // One household needs no switcher — the header just names it.
+    await expect(page.locator('header').getByText(first)).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Household' })).toHaveCount(0);
+
+    // Give the first household a piece of data the second must not show.
+    await page.goto('/budget');
+    await createEnvelope(page, 'Groceries');
+
+    await page.getByRole('link', { name: 'New household' }).click();
+    await expect(page).toHaveURL('/household/create');
+    await expect(page.getByRole('heading', { name: 'Create another household' })).toBeVisible();
+    // The page lists what already exists, so a duplicate is visible up front.
+    await expect(page.getByText(first)).toBeVisible();
+    await createHousehold(page, second);
+
+    // The switcher shows up once there is something to switch between.
+    const switcher = page.getByRole('combobox', { name: 'Household' });
+    await expect(switcher.locator('option:checked')).toHaveText(second);
+
+    // The new household starts empty — this is the bug the switcher exists for.
+    await page.goto('/budget');
+    await expect(page.getByRole('heading', { name: 'Groceries' })).toHaveCount(0);
+
+    await switchTo(page.getByRole('combobox', { name: 'Household' }), first);
+    await expect(page).toHaveURL('/');
+    await expect(page.getByRole('heading', { name: `Welcome, ${first}` })).toBeVisible();
+
+    // Switching must drop the other household's cached budget data, not merge it.
+    await page.goto('/budget');
+    await expect(page.getByRole('heading', { name: 'Groceries' })).toBeVisible();
+  });
+
+  test('warns when a new household reuses an existing name, without blocking it', async ({
+    page,
+  }) => {
+    const name = `Duplicate ${Date.now()}`;
+    await signUpWithHousehold(page, { emailPrefix: 'dup', householdName: name });
+
+    await page.goto('/household/create');
+    await page.getByLabel('Household name').fill(name);
+    await expect(page.getByText('Same name as an existing household')).toBeVisible();
+
+    // A warning, not a validation error: creating it is still allowed.
+    await expect(page.getByRole('button', { name: 'Create household' })).toBeEnabled();
+    // And the page is no longer a dead end for someone who already has one.
+    await expect(page.getByRole('link', { name: 'Cancel' })).toBeVisible();
+  });
+});

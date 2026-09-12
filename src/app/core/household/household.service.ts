@@ -36,6 +36,32 @@ export interface HouseholdInvite {
 
 const CURRENT_HOUSEHOLD_STORAGE_KEY = 'pfp.currentHouseholdId';
 
+/**
+ * The selected household is remembered per browser, so two devices signed in
+ * to the same account can sit on different households. Reads and writes are
+ * guarded because storage can be unavailable (private mode, blocked cookies)
+ * and a throwing selection must not take the whole app down.
+ */
+function readStoredHouseholdId(): string | null {
+  try {
+    return localStorage.getItem(CURRENT_HOUSEHOLD_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredHouseholdId(householdId: string | null): void {
+  try {
+    if (householdId === null) {
+      localStorage.removeItem(CURRENT_HOUSEHOLD_STORAGE_KEY);
+    } else {
+      localStorage.setItem(CURRENT_HOUSEHOLD_STORAGE_KEY, householdId);
+    }
+  } catch {
+    // Selection just won't survive a reload; not worth failing the action.
+  }
+}
+
 @Injectable({ providedIn: 'root' })
 export class HouseholdService {
   private readonly supabase = inject(SupabaseService).client;
@@ -43,9 +69,7 @@ export class HouseholdService {
 
   private readonly householdsSignal = signal<Household[]>([]);
   private readonly loadedSignal = signal(false);
-  private readonly currentHouseholdIdSignal = signal<string | null>(
-    localStorage.getItem(CURRENT_HOUSEHOLD_STORAGE_KEY)
-  );
+  private readonly currentHouseholdIdSignal = signal<string | null>(readStoredHouseholdId());
   private readonly membersSignal = signal<HouseholdMember[]>([]);
   private readonly invitesSignal = signal<HouseholdInvite[]>([]);
 
@@ -58,6 +82,7 @@ export class HouseholdService {
     const currentId = this.currentHouseholdIdSignal();
     return households.find((household) => household.id === currentId) ?? households[0] ?? null;
   });
+  readonly hasMultipleHouseholds = computed(() => this.householdsSignal().length > 1);
   readonly currentRole = computed<HouseholdRole | null>(() => {
     const userId = this.auth.user()?.id;
     return this.membersSignal().find((member) => member.user_id === userId)?.role ?? null;
@@ -75,12 +100,45 @@ export class HouseholdService {
 
     this.householdsSignal.set(data ?? []);
     this.loadedSignal.set(true);
+    this.dropStaleSelection();
     return this.householdsSignal();
   }
 
   selectHousehold(householdId: string): void {
     this.currentHouseholdIdSignal.set(householdId);
-    localStorage.setItem(CURRENT_HOUSEHOLD_STORAGE_KEY, householdId);
+    writeStoredHouseholdId(householdId);
+  }
+
+  /**
+   * Switches the active household and reloads the app at the dashboard.
+   *
+   * Feature components fetch their data once, in their constructor, and the
+   * budget/net-worth/rates services cache it in root-level signals keyed to
+   * whichever household was active at fetch time. A full reload is what
+   * guarantees none of that survives the switch; an in-place navigation would
+   * leave the previous household's envelopes, accounts and rates on screen.
+   */
+  switchHousehold(householdId: string): void {
+    this.selectHousehold(householdId);
+    window.location.assign('/');
+  }
+
+  /**
+   * A household id stored by this browser can point at a household the user no
+   * longer has (left, removed, or deleted elsewhere). Left in place it silently
+   * wins over the fallback below and the app looks empty, so clear it and let
+   * `currentHousehold` fall back to the first one the account can actually see.
+   */
+  private dropStaleSelection(): void {
+    const storedId = this.currentHouseholdIdSignal();
+    if (!storedId) {
+      return;
+    }
+
+    if (!this.householdsSignal().some((household) => household.id === storedId)) {
+      this.currentHouseholdIdSignal.set(null);
+      writeStoredHouseholdId(null);
+    }
   }
 
   async createHousehold(name: string): Promise<Household> {

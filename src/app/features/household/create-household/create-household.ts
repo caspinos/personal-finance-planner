@@ -1,6 +1,7 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { RouterLink } from '@angular/router';
 
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
@@ -15,6 +16,7 @@ import { HouseholdService } from '../../../core/household/household.service';
 @Component({
   selector: 'app-create-household',
   imports: [
+    RouterLink,
     ReactiveFormsModule,
     HlmCardImports,
     HlmFieldImports,
@@ -28,9 +30,19 @@ import { HouseholdService } from '../../../core/household/household.service';
     <div class="flex min-h-svh items-center justify-center p-6">
       <div hlmCard class="w-full max-w-sm">
         <div hlmCardHeader>
-          <h1 hlmCardTitle>{{ 'household.create.title' | transloco }}</h1>
+          <h1 hlmCardTitle>
+            @if (hasExisting()) {
+              {{ 'household.create.titleAnother' | transloco }}
+            } @else {
+              {{ 'household.create.title' | transloco }}
+            }
+          </h1>
           <p hlmCardDescription>
-            {{ 'household.create.description' | transloco }}
+            @if (hasExisting()) {
+              {{ 'household.create.descriptionAnother' | transloco }}
+            } @else {
+              {{ 'household.create.description' | transloco }}
+            }
           </p>
         </div>
 
@@ -44,6 +56,26 @@ import { HouseholdService } from '../../../core/household/household.service';
               }
             </div>
 
+            @if (duplicateName(); as name) {
+              <div hlmAlert>
+                <p hlmAlertTitle>{{ 'household.create.duplicateTitle' | transloco }}</p>
+                <p hlmAlertDescription>
+                  {{ 'household.create.duplicateDescription' | transloco: { name } }}
+                </p>
+              </div>
+            }
+
+            @if (hasExisting()) {
+              <div class="flex flex-col gap-1">
+                <span class="text-sm font-medium">{{ 'household.create.existing' | transloco }}</span>
+                <ul class="text-muted-foreground flex flex-col gap-1 text-sm">
+                  @for (household of households.households(); track household.id) {
+                    <li>{{ household.name }}</li>
+                  }
+                </ul>
+              </div>
+            }
+
             @if (errorMessage()) {
               <div hlmAlert variant="destructive">
                 <p hlmAlertTitle>{{ 'household.create.errorTitle' | transloco }}</p>
@@ -51,14 +83,19 @@ import { HouseholdService } from '../../../core/household/household.service';
               </div>
             }
 
-            <button hlmBtn type="submit" [disabled]="form.invalid || submitting()">
-              @if (submitting()) {
-                <hlm-spinner />
-                {{ 'common.saving' | transloco }}
-              } @else {
-                {{ 'household.create.submit' | transloco }}
+            <div class="flex gap-2">
+              <button hlmBtn type="submit" [disabled]="form.invalid || submitting()">
+                @if (submitting()) {
+                  <hlm-spinner />
+                  {{ 'common.saving' | transloco }}
+                } @else {
+                  {{ 'household.create.submit' | transloco }}
+                }
+              </button>
+              @if (hasExisting()) {
+                <a hlmBtn variant="outline" routerLink="/">{{ 'common.cancel' | transloco }}</a>
               }
-            </button>
+            </div>
           </form>
         </div>
       </div>
@@ -66,8 +103,7 @@ import { HouseholdService } from '../../../core/household/household.service';
   `,
 })
 export class CreateHousehold {
-  private readonly households = inject(HouseholdService);
-  private readonly router = inject(Router);
+  protected readonly households = inject(HouseholdService);
   private readonly fb = inject(FormBuilder);
 
   protected readonly submitting = signal(false);
@@ -76,6 +112,41 @@ export class CreateHousehold {
   protected readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.required, Validators.minLength(2)]],
   });
+
+  private readonly name = toSignal(this.form.controls.name.valueChanges, {
+    initialValue: this.form.controls.name.value,
+  });
+
+  protected readonly hasExisting = computed(() => this.households.households().length > 0);
+
+  /**
+   * Creating a second household with the same name is how an account ends up
+   * with two indistinguishable entries in the switcher, so surface the clash
+   * while it can still be avoided. It stays a warning, not a validation error:
+   * separate households really can share a name.
+   */
+  protected readonly duplicateName = computed(() => {
+    const typed = this.name().trim().toLocaleLowerCase();
+    if (!typed) {
+      return null;
+    }
+
+    return (
+      this.households
+        .households()
+        .find((household) => household.name.trim().toLocaleLowerCase() === typed)?.name ?? null
+    );
+  });
+
+  constructor() {
+    // Reachable directly (deep link, or the header's "new household" action),
+    // so the list this page reasons about may not have been fetched yet.
+    if (!this.households.loaded()) {
+      void this.households.loadHouseholds().catch(() => {
+        // Non-fatal: only the duplicate hint and cancel affordance depend on it.
+      });
+    }
+  }
 
   protected async submit(): Promise<void> {
     if (this.form.invalid || this.submitting()) {
@@ -87,8 +158,10 @@ export class CreateHousehold {
 
     try {
       const { name } = this.form.getRawValue();
-      await this.households.createHousehold(name);
-      await this.router.navigateByUrl('/');
+      const created = await this.households.createHousehold(name);
+      // Enter the new household the same way the switcher does, so no data
+      // cached for the previous one is left in the root services.
+      this.households.switchHousehold(created.id);
     } catch (error) {
       this.errorMessage.set(this.extractMessage(error));
     } finally {

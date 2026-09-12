@@ -8,7 +8,9 @@
       "rates": "Kursy",
       "household": "Gospodarstwo domowe"
     },
-    "signOut": "Wyloguj się"
+    "signOut": "Wyloguj się",
+    "household": "Gospodarstwo domowe",
+    "newHousehold": "Nowe gospodarstwo domowe"
   },
   "common": {
     "cancel": "Anuluj",
@@ -61,7 +63,12 @@
       "description": "Gospodarstwo domowe grupuje Twój budżet i dane o majątku netto i można je później udostępnić innym.",
       "name": "Nazwa gospodarstwa domowego",
       "errorTitle": "Nie udało się utworzyć gospodarstwa domowego",
-      "submit": "Utwórz gospodarstwo domowe"
+      "submit": "Utwórz gospodarstwo domowe",
+      "titleAnother": "Utwórz kolejne gospodarstwo domowe",
+      "descriptionAnother": "Nowe gospodarstwo domowe zaczyna się puste, z własnym budżetem i majątkiem netto. Obecne pozostaje bez zmian, a między nimi przełączysz się w nagłówku.",
+      "existing": "Już posiadasz",
+      "duplicateTitle": "Taka sama nazwa jak istniejące gospodarstwo domowe",
+      "duplicateDescription": "Masz już gospodarstwo domowe o nazwie „{{name}}”. Dwa o tej samej nazwie trudno odróżnić w przełączniku — rozważ inną nazwę."
     }
   },
   "budget": {
