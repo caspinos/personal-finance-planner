@@ -1,5 +1,7 @@
 import { Component, computed, input } from '@angular/core';
 
+import { hlm } from '@spartan-ng/helm/utils';
+
 /**
  * App brand mark: ascending bars with a trending-up arrow on a rounded tile.
  * Same geometry as the favicon in `public/icon.svg`, but drawn with theme
@@ -27,9 +29,10 @@ import { Component, computed, input } from '@angular/core';
 export class AppLogo {
   readonly size = input<'sm' | 'lg'>('sm');
 
-  protected readonly tileClass = computed(
-    () =>
-      'bg-primary text-primary-foreground inline-flex shrink-0 items-center justify-center ' +
-      (this.size() === 'lg' ? 'size-12 rounded-xl' : 'size-8 rounded-lg'),
+  protected readonly tileClass = computed(() =>
+    hlm(
+      'bg-primary text-primary-foreground inline-flex shrink-0 items-center justify-center',
+      this.size() === 'lg' ? 'size-12 rounded-xl' : 'size-8 rounded-lg',
+    ),
   );
 }
