@@ -82,6 +82,8 @@
     "noEnvelopesTitle": "Brak jeszcze kopert",
     "noEnvelopesDescription": "Utwórz swoją pierwszą kopertę, aby rozpocząć budżetowanie.",
     "noRateSet": "Brak ustawionego kursu {{currency}}",
+    "pace": "Zużyto {{used}}% dostępnego budżetu, upłynęło {{elapsed}}% miesiąca",
+    "paceNoBudget": "Brak dostępnego budżetu w tej kopercie na ten miesiąc",
     "viewHistory": "Zobacz historię",
     "rename": "Zmień nazwę",
     "recurringRulesTitle": "Reguły cykliczne",

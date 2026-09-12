@@ -20,6 +20,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { BudgetService } from '../../core/budget/budget.service';
 import { HouseholdService } from '../../core/household/household.service';
 import { LanguageService } from '../../core/i18n/language.service';
+import { EnvelopePace, envelopePace, monthElapsedRatio } from './budget-pace';
 
 function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -112,13 +113,39 @@ function endOfMonth(date: Date): Date {
       } @else {
         <ul class="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
           @for (envelope of envelopes(); track envelope.id) {
-            <li hlmCard size="sm">
-              <div class="flex items-center gap-2 px-3">
+            @let pace = paces()[envelope.id];
+            <li hlmCard size="sm" class="relative">
+              <!-- Budget consumed, filling left to right; amber once spending
+                   has outrun the month, green while it is still behind it. -->
+              <div
+                aria-hidden="true"
+                class="pointer-events-none absolute inset-y-0 left-0"
+                [class.bg-budget-on-track]="!pace.overPace"
+                [class.bg-budget-over-pace]="pace.overPace"
+                [style.width.%]="pace.fillRatio * 100"
+              ></div>
+              <!-- How far into the month we are. Only drawn for a month that is
+                   actually running: for a past or future one it would sit flat
+                   against an edge and say nothing. -->
+              @if (elapsedRatio() > 0 && elapsedRatio() < 1) {
+                <div
+                  aria-hidden="true"
+                  class="bg-muted-foreground/50 pointer-events-none absolute inset-y-0 w-px"
+                  [style.left.%]="elapsedRatio() * 100"
+                ></div>
+              }
+              <div class="relative flex items-center gap-2 px-3">
                 <div class="flex min-w-0 flex-1 flex-col">
                   <div class="flex items-baseline justify-between gap-2">
                     <h2 class="truncate text-sm font-medium" [title]="envelope.name">
                       {{ envelope.name }}
                     </h2>
+                    <span class="sr-only">
+                      {{
+                        (pace.hasBudget ? 'budget.pace' : 'budget.paceNoBudget')
+                          | transloco: { used: pace.usedPercent, elapsed: elapsedPercent() }
+                      }}
+                    </span>
                     <span
                       class="shrink-0 text-sm font-semibold tabular-nums"
                       [class.text-destructive]="(balances()[envelope.id]?.balance ?? 0) < 0"
@@ -263,7 +290,8 @@ export class Budget {
   private readonly language = inject(LanguageService);
 
   protected readonly loading = signal(true);
-  protected readonly month = signal(startOfMonth(new Date()));
+  protected readonly today = signal(new Date());
+  protected readonly month = signal(startOfMonth(this.today()));
   protected readonly envelopes = this.budget.activeEnvelopes;
   protected readonly balances = this.budget.balances;
   protected readonly recurringRules = this.budget.recurringRules;
@@ -277,6 +305,32 @@ export class Budget {
     this.month().toLocaleDateString(this.language.localeTag(), { month: 'long', year: 'numeric' }),
   );
 
+  /** Share of the displayed month already behind us; drives the vertical marker. */
+  protected readonly elapsedRatio = computed(() => monthElapsedRatio(this.month(), this.today()));
+  protected readonly elapsedPercent = computed(() => Math.round(this.elapsedRatio() * 100));
+
+  /**
+   * Budget-usage-versus-time for every envelope, keyed by id. Spending comes from
+   * the month's own charges, while the denominator is derived from the balance
+   * left at the end of it -- see `envelopePace`.
+   */
+  protected readonly paces = computed<Record<string, EnvelopePace>>(() => {
+    const elapsed = this.elapsedRatio();
+    const spending = this.budget.monthlySpending();
+    const balances = this.balances();
+
+    const paces: Record<string, EnvelopePace> = {};
+    for (const envelope of this.envelopes()) {
+      paces[envelope.id] = envelopePace(
+        spending[envelope.id] ?? 0,
+        balances[envelope.id]?.balance ?? 0,
+        elapsed,
+      );
+    }
+
+    return paces;
+  });
+
   constructor() {
     void this.loadAll();
   }
@@ -284,13 +338,13 @@ export class Budget {
   protected previousMonth(): void {
     const current = this.month();
     this.month.set(new Date(current.getFullYear(), current.getMonth() - 1, 1));
-    void this.loadBalances();
+    void this.loadMonth();
   }
 
   protected nextMonth(): void {
     const current = this.month();
     this.month.set(new Date(current.getFullYear(), current.getMonth() + 1, 1));
-    void this.loadBalances();
+    void this.loadMonth();
   }
 
   protected envelopeName(envelopeId: string): string {
@@ -328,11 +382,16 @@ export class Budget {
     this.loading.set(true);
     await this.budget.loadEnvelopes();
     await this.budget.processDueRecurringRules();
-    await Promise.all([this.loadBalances(), this.budget.loadRecurringRules()]);
+    await Promise.all([this.loadMonth(), this.budget.loadRecurringRules()]);
     this.loading.set(false);
   }
 
-  private async loadBalances(): Promise<void> {
-    await this.budget.loadBalances(endOfMonth(this.month()));
+  private async loadMonth(): Promise<void> {
+    const month = this.month();
+
+    await Promise.all([
+      this.budget.loadBalances(endOfMonth(month)),
+      this.budget.loadMonthlySpending(month, endOfMonth(month)),
+    ]);
   }
 }

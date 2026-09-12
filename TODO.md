@@ -8,3 +8,4 @@
 - [x] Add Polish translation via Transloco + a language selection/switch mechanism
 - [x] Support currency rates from frankfurter.dev
 - [x] Add a bulk asset valuation form: one date, a valuation and a flows column for every account
+- [x] Show budget usage against the elapsed month behind each envelope tile

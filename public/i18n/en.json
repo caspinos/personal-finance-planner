@@ -82,6 +82,8 @@
     "noEnvelopesTitle": "No envelopes yet",
     "noEnvelopesDescription": "Create your first envelope to start budgeting.",
     "noRateSet": "No {{currency}} rate set",
+    "pace": "Used {{used}}% of the available budget, {{elapsed}}% of the month elapsed",
+    "paceNoBudget": "No budget available in this envelope for this month",
     "viewHistory": "View history",
     "rename": "Rename",
     "recurringRulesTitle": "Recurring rules",

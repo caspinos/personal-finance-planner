@@ -192,11 +192,13 @@ export class BudgetService {
   private readonly envelopesSignal = signal<Envelope[]>([]);
   private readonly balancesSignal = signal<Record<string, EnvelopeBalance>>({});
   private readonly recurringRulesSignal = signal<RecurringEnvelopeRule[]>([]);
+  private readonly monthlySpendingSignal = signal<Record<string, number>>({});
 
   readonly envelopes = this.envelopesSignal.asReadonly();
   readonly activeEnvelopes = computed(() => this.envelopesSignal().filter((e) => !e.archived));
   readonly balances = this.balancesSignal.asReadonly();
   readonly recurringRules = this.recurringRulesSignal.asReadonly();
+  readonly monthlySpending = this.monthlySpendingSignal.asReadonly();
 
   async loadEnvelope(envelopeId: string): Promise<Envelope> {
     const householdId = this.requireHouseholdId();
@@ -254,6 +256,64 @@ export class BudgetService {
 
     this.balancesSignal.set(balances);
     return balances;
+  }
+
+  /**
+   * How much each envelope consumed between `from` and `to`, keyed by envelope
+   * id: plain expenses plus the amortization slices due in that window. It
+   * mirrors what `get_envelope_balances` subtracts -- an amortized payment is
+   * budget-neutral and only its slices count (invariants #1 and #2 of
+   * `20260705040000_amortized_expenses.sql`).
+   *
+   * Income and transfers are deliberately excluded. They change how much an
+   * envelope *had*, not how much of it was used.
+   */
+  async loadMonthlySpending(from: Date, to: Date): Promise<Record<string, number>> {
+    const householdId = this.requireHouseholdId();
+    const fromDate = toDateOnly(from);
+    const toDate = toDateOnly(to);
+
+    const expenseQuery = this.supabase
+      .from('budget_transactions')
+      .select('envelope_id, amount')
+      .eq('household_id', householdId)
+      .eq('type', 'expense')
+      .is('amortized_months', null)
+      .gte('occurred_on', fromDate)
+      .lte('occurred_on', toDate);
+
+    const chargesQuery = this.supabase.rpc('get_amortized_charges', {
+      p_household_id: householdId,
+      p_from: fromDate,
+      p_to: toDate,
+    });
+
+    const [{ data: expenses, error: expensesError }, { data: charges, error: chargesError }] =
+      await Promise.all([expenseQuery, chargesQuery]);
+
+    if (expensesError) {
+      throw expensesError;
+    }
+
+    if (chargesError) {
+      throw chargesError;
+    }
+
+    const spending: Record<string, number> = {};
+    const add = (envelopeId: string, amount: number) => {
+      spending[envelopeId] = (spending[envelopeId] ?? 0) + amount;
+    };
+
+    for (const expense of expenses ?? []) {
+      add(expense.envelope_id, Number(expense.amount));
+    }
+
+    for (const charge of (charges ?? []) as AmortizedCharge[]) {
+      add(charge.envelope_id, Number(charge.amount));
+    }
+
+    this.monthlySpendingSignal.set(spending);
+    return spending;
   }
 
   async loadEnvelopeEvents(input: {
