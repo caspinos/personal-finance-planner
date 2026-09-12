@@ -11,6 +11,7 @@ import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
 import { TranslocoModule } from '@jsverse/transloco';
 
 import { AuthService } from '../../../core/auth/auth.service';
+import { AppLogo } from '../../../layout/app-logo/app-logo';
 
 @Component({
   selector: 'app-register',
@@ -24,9 +25,12 @@ import { AuthService } from '../../../core/auth/auth.service';
     HlmAlertImports,
     HlmSpinnerImports,
     TranslocoModule,
+    AppLogo,
   ],
   template: `
-    <div class="flex min-h-svh items-center justify-center p-6">
+    <div class="flex min-h-svh flex-col items-center justify-center gap-6 p-6">
+      <app-logo size="lg" />
+
       <div hlmCard class="w-full max-w-sm">
         <div hlmCardHeader>
           <h1 hlmCardTitle>{{ 'auth.register.title' | transloco }}</h1>
