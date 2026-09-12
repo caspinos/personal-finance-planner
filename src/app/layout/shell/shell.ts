@@ -9,16 +9,20 @@ import { lucideMenu, lucidePlus, lucideX } from '@ng-icons/lucide';
 import { AuthService } from '../../core/auth/auth.service';
 import { HouseholdService } from '../../core/household/household.service';
 import { LanguageService } from '../../core/i18n/language.service';
+import { AppLogo } from '../app-logo/app-logo';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, HlmButtonImports, TranslocoModule, NgIcon],
+  imports: [RouterOutlet, RouterLink, HlmButtonImports, TranslocoModule, NgIcon, AppLogo],
   providers: [provideIcons({ lucideMenu, lucidePlus, lucideX })],
   template: `
     <div class="bg-background text-foreground flex min-h-svh flex-col">
       <header class="border-border border-b">
         <div class="flex items-center gap-4 px-4 py-3 sm:px-6">
-          <span class="font-semibold">{{ 'shell.title' | transloco }}</span>
+          <span class="flex items-center gap-2">
+            <app-logo />
+            <span class="font-semibold">{{ 'shell.title' | transloco }}</span>
+          </span>
 
           <nav class="hidden gap-2 sm:flex">
             <a hlmBtn variant="ghost" size="sm" routerLink="/">{{ 'shell.nav.dashboard' | transloco }}</a>
