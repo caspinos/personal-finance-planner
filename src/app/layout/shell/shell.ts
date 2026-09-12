@@ -1,7 +1,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { Router, RouterLink, RouterOutlet } from '@angular/router';
+import { RouterLink, RouterOutlet } from '@angular/router';
 
 import { HlmButtonImports } from '@spartan-ng/helm/button';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { TranslocoModule } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideMenu, lucidePlus, lucideX } from '@ng-icons/lucide';
@@ -13,7 +15,16 @@ import { AppLogo } from '../app-logo/app-logo';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, HlmButtonImports, TranslocoModule, NgIcon, AppLogo],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    HlmButtonImports,
+    HlmFieldImports,
+    HlmSelectImports,
+    TranslocoModule,
+    NgIcon,
+    AppLogo,
+  ],
   providers: [provideIcons({ lucideMenu, lucidePlus, lucideX })],
   template: `
     <div class="bg-background text-foreground flex min-h-svh flex-col">
@@ -38,24 +49,30 @@ import { AppLogo } from '../app-logo/app-logo';
 
           <div class="ml-auto hidden items-center gap-2 sm:flex">
             @if (households.hasMultipleHouseholds()) {
-              <select
-                class="border-input bg-background rounded-md border px-2 py-1 text-sm"
-                [attr.aria-label]="'shell.household' | transloco"
-                (change)="onHouseholdChange($event)"
-              >
-                @for (household of households.households(); track household.id) {
-                  <option [value]="household.id" [selected]="household.id === currentHouseholdId()">
-                    {{ household.name }}
-                  </option>
-                }
-              </select>
+              <div hlmField>
+                <label hlmFieldLabel class="sr-only">{{ 'shell.household' | transloco }}</label>
+                <hlm-select
+                  [value]="currentHouseholdId()"
+                  (valueChange)="onHouseholdChange($event)"
+                  [itemToString]="householdToString"
+                >
+                  <hlm-select-trigger size="sm" class="w-40">
+                    <hlm-select-value />
+                  </hlm-select-trigger>
+                  <hlm-select-content *hlmSelectPortal>
+                    @for (household of households.households(); track household.id) {
+                      <hlm-select-item [value]="household.id">{{ household.name }}</hlm-select-item>
+                    }
+                  </hlm-select-content>
+                </hlm-select>
+              </div>
             } @else if (households.currentHousehold(); as household) {
               <span class="text-muted-foreground text-sm">{{ household.name }}</span>
             }
             <a
               hlmBtn
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               routerLink="/household/create"
               [attr.aria-label]="'shell.newHousehold' | transloco"
               [title]="'shell.newHousehold' | transloco"
@@ -141,17 +158,23 @@ import { AppLogo } from '../app-logo/app-logo';
             </nav>
 
             @if (households.hasMultipleHouseholds()) {
-              <select
-                class="border-input bg-background rounded-md border px-2 py-1 text-sm"
-                [attr.aria-label]="'shell.household' | transloco"
-                (change)="onHouseholdChange($event)"
-              >
-                @for (household of households.households(); track household.id) {
-                  <option [value]="household.id" [selected]="household.id === currentHouseholdId()">
-                    {{ household.name }}
-                  </option>
-                }
-              </select>
+              <div hlmField>
+                <label hlmFieldLabel class="sr-only">{{ 'shell.household' | transloco }}</label>
+                <hlm-select
+                  [value]="currentHouseholdId()"
+                  (valueChange)="onHouseholdChange($event)"
+                  [itemToString]="householdToString"
+                >
+                  <hlm-select-trigger class="w-full">
+                    <hlm-select-value />
+                  </hlm-select-trigger>
+                  <hlm-select-content *hlmSelectPortal>
+                    @for (household of households.households(); track household.id) {
+                      <hlm-select-item [value]="household.id">{{ household.name }}</hlm-select-item>
+                    }
+                  </hlm-select-content>
+                </hlm-select>
+              </div>
             } @else if (households.currentHousehold(); as household) {
               <span class="text-muted-foreground text-sm">{{ household.name }}</span>
             }
@@ -162,8 +185,10 @@ import { AppLogo } from '../app-logo/app-logo';
               class="justify-start"
               routerLink="/household/create"
               (click)="closeMobileMenu()"
-              >{{ 'shell.newHousehold' | transloco }}</a
             >
+              <ng-icon name="lucidePlus" size="16" />
+              {{ 'shell.newHousehold' | transloco }}
+            </a>
 
             <select
               class="border-input bg-background rounded-md border px-2 py-1 text-sm"
@@ -196,7 +221,6 @@ export class Shell {
   protected readonly auth = inject(AuthService);
   protected readonly households = inject(HouseholdService);
   protected readonly language = inject(LanguageService);
-  private readonly router = inject(Router);
 
   protected readonly mobileMenuOpen = signal(false);
   protected readonly currentHouseholdId = computed(
@@ -211,9 +235,12 @@ export class Shell {
     this.mobileMenuOpen.set(false);
   }
 
-  protected onHouseholdChange(event: Event): void {
-    const householdId = (event.target as HTMLSelectElement).value;
-    if (householdId !== this.currentHouseholdId()) {
+  protected readonly householdToString = (householdId: string): string =>
+    this.households.households().find((household) => household.id === householdId)?.name ??
+    householdId;
+
+  protected onHouseholdChange(householdId: string | null | undefined): void {
+    if (householdId && householdId !== this.currentHouseholdId()) {
       this.households.switchHousehold(householdId);
     }
   }
@@ -224,6 +251,10 @@ export class Shell {
 
   protected async signOut(): Promise<void> {
     await this.auth.signOut();
-    await this.router.navigateByUrl('/login');
+    // Reload rather than route: HouseholdService caches the household list and
+    // the budget/net-worth/rates services cache their rows in root signals, and
+    // householdGuard skips reloading once it has loaded. Routing to /login would
+    // carry all of that into whoever signs in next in this tab.
+    window.location.assign('/login');
   }
 }

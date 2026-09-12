@@ -1,19 +1,8 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-import { createHousehold, signUpWithHousehold } from './support/auth';
-import { createEnvelope } from './support/budget';
-
-/** Picks a household in the header switcher by its visible name. */
-async function switchTo(switcher: Locator, householdName: string): Promise<void> {
-  const value = await switcher
-    .locator('option')
-    .filter({ hasText: householdName })
-    .getAttribute('value');
-  if (!value) {
-    throw new Error(`No option for household "${householdName}" in the switcher.`);
-  }
-  await switcher.selectOption(value);
-}
+import { createHousehold, registerAndLogIn, signUpWithHousehold, uniqueEmail } from './support/auth';
+import { createEnvelope, selectComboboxOption } from './support/budget';
+import { signOut } from './support/household';
 
 test.describe('Multiple households', () => {
   test('creates a second household, switches back, and keeps their data apart', async ({
@@ -41,20 +30,38 @@ test.describe('Multiple households', () => {
     await createHousehold(page, second);
 
     // The switcher shows up once there is something to switch between.
-    const switcher = page.getByRole('combobox', { name: 'Household' });
-    await expect(switcher.locator('option:checked')).toHaveText(second);
+    await expect(page.getByRole('combobox', { name: 'Household' })).toHaveText(second);
 
     // The new household starts empty — this is the bug the switcher exists for.
     await page.goto('/budget');
     await expect(page.getByRole('heading', { name: 'Groceries' })).toHaveCount(0);
 
-    await switchTo(page.getByRole('combobox', { name: 'Household' }), first);
+    await selectComboboxOption(page, 'Household', first);
     await expect(page).toHaveURL('/');
     await expect(page.getByRole('heading', { name: `Welcome, ${first}` })).toBeVisible();
 
     // Switching must drop the other household's cached budget data, not merge it.
     await page.goto('/budget');
     await expect(page.getByRole('heading', { name: 'Groceries' })).toBeVisible();
+  });
+
+  test('signing out drops the previous account household state', async ({ page }) => {
+    const suffix = Date.now();
+
+    await registerAndLogIn(page, uniqueEmail('alpha'));
+    await createHousehold(page, `Alpha ${suffix}`);
+    await signOut(page);
+
+    // Without a clean slate on sign-out, HouseholdService still holds Alpha and
+    // householdGuard skips reloading, so this second account would sail past the
+    // create-household step into the first account's household.
+    await registerAndLogIn(page, uniqueEmail('beta'));
+    await createHousehold(page, `Beta ${suffix}`);
+
+    const header = page.locator('header');
+    await expect(header.getByText(`Beta ${suffix}`)).toBeVisible();
+    await expect(header.getByText(`Alpha ${suffix}`)).toHaveCount(0);
+    await expect(page.getByRole('combobox', { name: 'Household' })).toHaveCount(0);
   });
 
   test('warns when a new household reuses an existing name, without blocking it', async ({

@@ -84,9 +84,15 @@ import { HouseholdService } from '../../../core/household/household.service';
             }
 
             <div class="flex gap-2">
-              <button hlmBtn type="submit" [disabled]="form.invalid || submitting()">
-                @if (submitting()) {
+              <button
+                hlmBtn
+                type="submit"
+                [disabled]="form.invalid || submitting() || loadingHouseholds()"
+              >
+                @if (submitting() || loadingHouseholds()) {
                   <hlm-spinner />
+                }
+                @if (submitting()) {
                   {{ 'common.saving' | transloco }}
                 } @else {
                   {{ 'household.create.submit' | transloco }}
@@ -107,6 +113,7 @@ export class CreateHousehold {
   private readonly fb = inject(FormBuilder);
 
   protected readonly submitting = signal(false);
+  protected readonly loadingHouseholds = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
 
   protected readonly form = this.fb.nonNullable.group({
@@ -140,16 +147,28 @@ export class CreateHousehold {
 
   constructor() {
     // Reachable directly (deep link, or the header's "new household" action),
-    // so the list this page reasons about may not have been fetched yet.
+    // so the list this page reasons about may not have been fetched yet. The
+    // form stays disabled until it settles: submitting before the list arrives
+    // would show the first-run page and skip the duplicate warning entirely,
+    // which is exactly the case this page exists to catch.
     if (!this.households.loaded()) {
-      void this.households.loadHouseholds().catch(() => {
-        // Non-fatal: only the duplicate hint and cancel affordance depend on it.
-      });
+      this.loadingHouseholds.set(true);
+      this.form.disable();
+      void this.households
+        .loadHouseholds()
+        .catch(() => {
+          // Non-fatal: without the list there is no duplicate hint to show, but
+          // creating a household must still be possible.
+        })
+        .finally(() => {
+          this.loadingHouseholds.set(false);
+          this.form.enable();
+        });
     }
   }
 
   protected async submit(): Promise<void> {
-    if (this.form.invalid || this.submitting()) {
+    if (this.form.invalid || this.submitting() || this.loadingHouseholds()) {
       return;
     }
 

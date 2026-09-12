@@ -52,9 +52,10 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   plain text otherwise) and a "new household" action, so `/household/create`
   is reachable beyond the first-run redirect. `HouseholdService.switchHousehold`
   stores the pick and reloads the app at `/` -- feature components fetch in
-  their constructor and the budget/net-worth/rates services cache per
-  household in root signals, so a reload is what keeps the previous
-  household's data off the screen. The create page adapts once the account
+  their constructor and the budget/net-worth/rates services each hold one
+  unkeyed root signal carrying whichever household was fetched last, so a
+  reload (not an in-place navigation) is what keeps the previous household's
+  data off the screen. Signing out reloads for the same reason. The create page adapts once the account
   has a household: it lists the existing ones, warns (without blocking) when
   the name is already taken, and offers a way back out. Covered by
   `e2e/households.spec.ts`.
