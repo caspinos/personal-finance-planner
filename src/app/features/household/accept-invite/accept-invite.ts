@@ -1,5 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
@@ -50,7 +50,6 @@ import { HouseholdService } from '../../../core/household/household.service';
 export class AcceptInvite {
   private readonly households = inject(HouseholdService);
   private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
   private readonly transloco = inject(TranslocoService);
 
   protected readonly loading = signal(true);
@@ -70,8 +69,10 @@ export class AcceptInvite {
     }
 
     try {
-      await this.households.acceptInvite(token);
-      await this.router.navigateByUrl('/');
+      const joined = await this.households.acceptInvite(token);
+      // A full reload, like the switcher: the accepting user may already have
+      // another household's data cached in the root services.
+      this.households.switchHousehold(joined.id);
     } catch (error) {
       this.errorMessage.set(this.extractMessage(error));
     } finally {

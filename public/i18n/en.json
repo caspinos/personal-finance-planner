@@ -8,7 +8,9 @@
       "rates": "Rates",
       "household": "Household"
     },
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "household": "Household",
+    "newHousehold": "New household"
   },
   "common": {
     "cancel": "Cancel",
@@ -61,7 +63,12 @@
       "description": "A household groups your budget and net worth data and can be shared with others later.",
       "name": "Household name",
       "errorTitle": "Couldn't create the household",
-      "submit": "Create household"
+      "submit": "Create household",
+      "titleAnother": "Create another household",
+      "descriptionAnother": "A new household starts empty, with its own budget and net worth. Your current one stays untouched and you can switch between them from the header.",
+      "existing": "You already have",
+      "duplicateTitle": "Same name as an existing household",
+      "duplicateDescription": "You already have a household called “{{name}}”. Two with the same name are hard to tell apart in the switcher — consider a different name."
     }
   },
   "budget": {

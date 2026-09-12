@@ -1,19 +1,31 @@
-import { Component, inject, signal } from '@angular/core';
-import { Router, RouterLink, RouterOutlet } from '@angular/router';
+import { Component, computed, inject, signal } from '@angular/core';
+import { RouterLink, RouterOutlet } from '@angular/router';
 
 import { HlmButtonImports } from '@spartan-ng/helm/button';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { TranslocoModule } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideMenu, lucideX } from '@ng-icons/lucide';
+import { lucideMenu, lucidePlus, lucideX } from '@ng-icons/lucide';
 
 import { AuthService } from '../../core/auth/auth.service';
-import { AppLogo } from '../app-logo/app-logo';
+import { HouseholdService } from '../../core/household/household.service';
 import { LanguageService } from '../../core/i18n/language.service';
+import { AppLogo } from '../app-logo/app-logo';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, HlmButtonImports, TranslocoModule, NgIcon, AppLogo],
-  providers: [provideIcons({ lucideMenu, lucideX })],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    HlmButtonImports,
+    HlmFieldImports,
+    HlmSelectImports,
+    TranslocoModule,
+    NgIcon,
+    AppLogo,
+  ],
+  providers: [provideIcons({ lucideMenu, lucidePlus, lucideX })],
   template: `
     <div class="bg-background text-foreground flex min-h-svh flex-col">
       <header class="border-border border-b">
@@ -35,8 +47,42 @@ import { LanguageService } from '../../core/i18n/language.service';
             }}</a>
           </nav>
 
+          <div class="ml-auto hidden items-center gap-2 sm:flex">
+            @if (households.hasMultipleHouseholds()) {
+              <div hlmField>
+                <label hlmFieldLabel class="sr-only">{{ 'shell.household' | transloco }}</label>
+                <hlm-select
+                  [value]="currentHouseholdId()"
+                  (valueChange)="onHouseholdChange($event)"
+                  [itemToString]="householdToString"
+                >
+                  <hlm-select-trigger size="sm" class="w-40">
+                    <hlm-select-value />
+                  </hlm-select-trigger>
+                  <hlm-select-content *hlmSelectPortal>
+                    @for (household of households.households(); track household.id) {
+                      <hlm-select-item [value]="household.id">{{ household.name }}</hlm-select-item>
+                    }
+                  </hlm-select-content>
+                </hlm-select>
+              </div>
+            } @else if (households.currentHousehold(); as household) {
+              <span class="text-muted-foreground text-sm">{{ household.name }}</span>
+            }
+            <a
+              hlmBtn
+              variant="ghost"
+              size="icon-sm"
+              routerLink="/household/create"
+              [attr.aria-label]="'shell.newHousehold' | transloco"
+              [title]="'shell.newHousehold' | transloco"
+            >
+              <ng-icon name="lucidePlus" size="16" />
+            </a>
+          </div>
+
           <select
-            class="border-input bg-background ml-auto hidden rounded-md border px-2 py-1 text-sm sm:ml-auto sm:block"
+            class="border-input bg-background hidden rounded-md border px-2 py-1 text-sm sm:block"
             (change)="onLanguageChange($event)"
             aria-label="Language"
           >
@@ -110,6 +156,40 @@ import { LanguageService } from '../../core/i18n/language.service';
                 >{{ 'shell.nav.household' | transloco }}</a
               >
             </nav>
+
+            @if (households.hasMultipleHouseholds()) {
+              <div hlmField>
+                <label hlmFieldLabel class="sr-only">{{ 'shell.household' | transloco }}</label>
+                <hlm-select
+                  [value]="currentHouseholdId()"
+                  (valueChange)="onHouseholdChange($event)"
+                  [itemToString]="householdToString"
+                >
+                  <hlm-select-trigger class="w-full">
+                    <hlm-select-value />
+                  </hlm-select-trigger>
+                  <hlm-select-content *hlmSelectPortal>
+                    @for (household of households.households(); track household.id) {
+                      <hlm-select-item [value]="household.id">{{ household.name }}</hlm-select-item>
+                    }
+                  </hlm-select-content>
+                </hlm-select>
+              </div>
+            } @else if (households.currentHousehold(); as household) {
+              <span class="text-muted-foreground text-sm">{{ household.name }}</span>
+            }
+            <a
+              hlmBtn
+              variant="ghost"
+              size="sm"
+              class="justify-start"
+              routerLink="/household/create"
+              (click)="closeMobileMenu()"
+            >
+              <ng-icon name="lucidePlus" size="16" />
+              {{ 'shell.newHousehold' | transloco }}
+            </a>
+
             <select
               class="border-input bg-background rounded-md border px-2 py-1 text-sm"
               (change)="onLanguageChange($event)"
@@ -139,10 +219,13 @@ import { LanguageService } from '../../core/i18n/language.service';
 })
 export class Shell {
   protected readonly auth = inject(AuthService);
+  protected readonly households = inject(HouseholdService);
   protected readonly language = inject(LanguageService);
-  private readonly router = inject(Router);
 
   protected readonly mobileMenuOpen = signal(false);
+  protected readonly currentHouseholdId = computed(
+    () => this.households.currentHousehold()?.id ?? null,
+  );
 
   protected toggleMobileMenu(): void {
     this.mobileMenuOpen.update((open) => !open);
@@ -152,12 +235,26 @@ export class Shell {
     this.mobileMenuOpen.set(false);
   }
 
+  protected readonly householdToString = (householdId: string): string =>
+    this.households.households().find((household) => household.id === householdId)?.name ??
+    householdId;
+
+  protected onHouseholdChange(householdId: string | null | undefined): void {
+    if (householdId && householdId !== this.currentHouseholdId()) {
+      this.households.switchHousehold(householdId);
+    }
+  }
+
   protected onLanguageChange(event: Event): void {
     this.language.setLanguage((event.target as HTMLSelectElement).value);
   }
 
   protected async signOut(): Promise<void> {
     await this.auth.signOut();
-    await this.router.navigateByUrl('/login');
+    // Reload rather than route: HouseholdService caches the household list and
+    // the budget/net-worth/rates services cache their rows in root signals, and
+    // householdGuard skips reloading once it has loaded. Routing to /login would
+    // carry all of that into whoever signs in next in this tab.
+    window.location.assign('/login');
   }
 }
