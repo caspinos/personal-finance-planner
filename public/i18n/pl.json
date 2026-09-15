@@ -79,6 +79,7 @@
     "fundEnvelopes": "Zasil koperty",
     "newRecurringRule": "Nowa reguła cykliczna",
     "loadingEnvelopes": "Ładowanie kopert…",
+    "loadErrorTitle": "Nie udało się załadować budżetu",
     "noEnvelopesTitle": "Brak jeszcze kopert",
     "noEnvelopesDescription": "Utwórz swoją pierwszą kopertę, aby rozpocząć budżetowanie.",
     "noRateSet": "Brak ustawionego kursu {{currency}}",

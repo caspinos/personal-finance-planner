@@ -24,12 +24,16 @@ function envelope(id: string, name: string): Envelope {
   };
 }
 
-/** Stands in for the loaded state the budget page renders from. */
-function fakeBudgetService(input: {
+interface BudgetState {
   envelopes: Envelope[];
   balances: Record<string, EnvelopeBalance>;
   spending: Record<string, number>;
-}) {
+  /** When set, the monthly-spending query rejects with it. */
+  spendingError?: Error;
+}
+
+/** Stands in for the loaded state the budget page renders from. */
+function fakeBudgetService(input: BudgetState) {
   return {
     envelopes: signal(input.envelopes),
     activeEnvelopes: signal(input.envelopes),
@@ -38,17 +42,14 @@ function fakeBudgetService(input: {
     recurringRules: signal([]),
     loadEnvelopes: () => Promise.resolve(input.envelopes),
     loadBalances: () => Promise.resolve(input.balances),
-    loadMonthlySpending: () => Promise.resolve(input.spending),
+    loadMonthlySpending: () =>
+      input.spendingError ? Promise.reject(input.spendingError) : Promise.resolve(input.spending),
     loadRecurringRules: () => Promise.resolve([]),
     processDueRecurringRules: () => Promise.resolve(0),
   };
 }
 
-async function renderBudget(input: {
-  envelopes: Envelope[];
-  balances: Record<string, EnvelopeBalance>;
-  spending: Record<string, number>;
-}) {
+async function renderBudget(input: BudgetState) {
   TestBed.configureTestingModule({
     imports: [Budget],
     providers: [
@@ -116,6 +117,19 @@ describe('Budget envelope tiles', () => {
 
     expect(fill.style.width).toBe('60%');
     expect(fill.classList).toContain('bg-budget-over-pace');
+  });
+
+  it('clears the spinner and shows the reason when a month fails to load', async () => {
+    const { root } = await renderBudget({
+      envelopes: [envelope('envelope-1', 'Groceries')],
+      balances: {},
+      spending: {},
+      spendingError: new Error('network is down'),
+    });
+
+    expect(root.textContent).toContain('network is down');
+    // The page came out of its loading state rather than hanging on the spinner.
+    expect(root.querySelector('li[data-slot="card"]')).not.toBeNull();
   });
 
   it('drops the marker for a month that is not running', async () => {

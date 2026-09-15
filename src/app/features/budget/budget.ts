@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 
@@ -12,6 +12,7 @@ import {
   lucidePlay,
   lucideTrash2,
 } from '@ng-icons/lucide';
+import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
@@ -36,6 +37,7 @@ function endOfMonth(date: Date): Date {
     NgIcon,
     RouterLink,
     DecimalPipe,
+    HlmAlertImports,
     HlmButtonImports,
     HlmCardImports,
     HlmSpinnerImports,
@@ -100,6 +102,13 @@ function endOfMonth(date: Date): Date {
           }}</a>
         </div>
       </div>
+
+      @if (errorMessage()) {
+        <div hlmAlert variant="destructive">
+          <p hlmAlertTitle>{{ 'budget.loadErrorTitle' | transloco }}</p>
+          <p hlmAlertDescription>{{ errorMessage() }}</p>
+        </div>
+      }
 
       @if (loading()) {
         <p class="text-muted-foreground text-sm">{{ 'budget.loadingEnvelopes' | transloco }}</p>
@@ -289,7 +298,11 @@ export class Budget {
   private readonly transloco = inject(TranslocoService);
   private readonly language = inject(LanguageService);
 
+  private readonly destroyRef = inject(DestroyRef);
+  private dateRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+
   protected readonly loading = signal(true);
+  protected readonly errorMessage = signal<string | null>(null);
   protected readonly today = signal(new Date());
   protected readonly month = signal(startOfMonth(this.today()));
   protected readonly envelopes = this.budget.activeEnvelopes;
@@ -332,19 +345,21 @@ export class Budget {
   });
 
   constructor() {
+    this.scheduleDateRefresh();
+    this.destroyRef.onDestroy(() => clearTimeout(this.dateRefreshTimer));
     void this.loadAll();
   }
 
   protected previousMonth(): void {
     const current = this.month();
     this.month.set(new Date(current.getFullYear(), current.getMonth() - 1, 1));
-    void this.loadMonth();
+    this.reloadMonth();
   }
 
   protected nextMonth(): void {
     const current = this.month();
     this.month.set(new Date(current.getFullYear(), current.getMonth() + 1, 1));
-    void this.loadMonth();
+    this.reloadMonth();
   }
 
   protected envelopeName(envelopeId: string): string {
@@ -380,18 +395,75 @@ export class Budget {
 
   private async loadAll(): Promise<void> {
     this.loading.set(true);
-    await this.budget.loadEnvelopes();
-    await this.budget.processDueRecurringRules();
-    await Promise.all([this.loadMonth(), this.budget.loadRecurringRules()]);
-    this.loading.set(false);
+    this.errorMessage.set(null);
+
+    try {
+      await this.budget.loadEnvelopes();
+      await this.budget.processDueRecurringRules();
+      await Promise.all([this.loadMonth(), this.budget.loadRecurringRules()]);
+    } catch (error) {
+      this.errorMessage.set(this.extractMessage(error));
+    } finally {
+      this.loading.set(false);
+    }
   }
 
+  /** Month switches surface their own failures rather than rejecting unheard. */
+  private reloadMonth(): void {
+    this.errorMessage.set(null);
+    void this.loadMonth().catch((error: unknown) =>
+      this.errorMessage.set(this.extractMessage(error)),
+    );
+  }
+
+  /**
+   * Both sides of the pace ratio are measured over the whole month, never up to
+   * today: the balance the tile shows is the end-of-month one, so an expense or
+   * a top-up booked for later this month is already in the denominator and has
+   * to be in the numerator too. Cutting the spending window at today instead
+   * would shrink the budget an envelope is judged against and overstate its
+   * usage.
+   */
   private async loadMonth(): Promise<void> {
+    this.refreshToday();
     const month = this.month();
 
     await Promise.all([
       this.budget.loadBalances(endOfMonth(month)),
       this.budget.loadMonthlySpending(month, endOfMonth(month)),
     ]);
+  }
+
+  /**
+   * Keeps `today` on the actual current day: the page can sit open across
+   * midnight, and a stale date would leave the elapsed-month marker a day
+   * behind (and with it the green/amber verdict).
+   */
+  private scheduleDateRefresh(): void {
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    this.dateRefreshTimer = setTimeout(() => {
+      this.today.set(new Date());
+      this.scheduleDateRefresh();
+    }, nextMidnight.getTime() - now.getTime());
+  }
+
+  private refreshToday(): void {
+    const now = new Date();
+    if (now.toDateString() !== this.today().toDateString()) {
+      this.today.set(now);
+    }
+  }
+
+  private extractMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    if (error && typeof error === 'object' && 'message' in error) {
+      return String((error as { message: unknown }).message);
+    }
+
+    return 'Something went wrong.';
   }
 }

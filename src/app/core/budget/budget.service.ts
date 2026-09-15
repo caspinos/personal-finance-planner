@@ -194,6 +194,14 @@ export class BudgetService {
   private readonly recurringRulesSignal = signal<RecurringEnvelopeRule[]>([]);
   private readonly monthlySpendingSignal = signal<Record<string, number>>({});
 
+  // Month-scoped loads are fired again on every month switch, and the responses
+  // can come back out of order. Each load takes a ticket and publishes only if
+  // it is still the newest, so a slow response for an abandoned month can never
+  // overwrite the month now on screen (nor pair its balances with another
+  // month's spending).
+  private balancesRequest = 0;
+  private monthlySpendingRequest = 0;
+
   readonly envelopes = this.envelopesSignal.asReadonly();
   readonly activeEnvelopes = computed(() => this.envelopesSignal().filter((e) => !e.archived));
   readonly balances = this.balancesSignal.asReadonly();
@@ -236,6 +244,7 @@ export class BudgetService {
 
   async loadBalances(asOf: Date): Promise<Record<string, EnvelopeBalance>> {
     const householdId = this.requireHouseholdId();
+    const request = ++this.balancesRequest;
 
     const { data, error } = await this.supabase.rpc('get_envelope_balances', {
       p_household_id: householdId,
@@ -254,7 +263,10 @@ export class BudgetService {
       };
     }
 
-    this.balancesSignal.set(balances);
+    if (request === this.balancesRequest) {
+      this.balancesSignal.set(balances);
+    }
+
     return balances;
   }
 
@@ -270,6 +282,7 @@ export class BudgetService {
    */
   async loadMonthlySpending(from: Date, to: Date): Promise<Record<string, number>> {
     const householdId = this.requireHouseholdId();
+    const request = ++this.monthlySpendingRequest;
     const fromDate = toDateOnly(from);
     const toDate = toDateOnly(to);
 
@@ -312,7 +325,10 @@ export class BudgetService {
       add(charge.envelope_id, Number(charge.amount));
     }
 
-    this.monthlySpendingSignal.set(spending);
+    if (request === this.monthlySpendingRequest) {
+      this.monthlySpendingSignal.set(spending);
+    }
+
     return spending;
   }
 

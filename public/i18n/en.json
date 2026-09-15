@@ -79,6 +79,7 @@
     "fundEnvelopes": "Fund envelopes",
     "newRecurringRule": "New recurring rule",
     "loadingEnvelopes": "Loading envelopes…",
+    "loadErrorTitle": "Couldn't load the budget",
     "noEnvelopesTitle": "No envelopes yet",
     "noEnvelopesDescription": "Create your first envelope to start budgeting.",
     "noRateSet": "No {{currency}} rate set",
