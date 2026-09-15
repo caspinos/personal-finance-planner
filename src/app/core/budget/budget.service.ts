@@ -193,6 +193,7 @@ export class BudgetService {
   private readonly balancesSignal = signal<Record<string, EnvelopeBalance>>({});
   private readonly recurringRulesSignal = signal<RecurringEnvelopeRule[]>([]);
   private readonly monthlySpendingSignal = signal<Record<string, number>>({});
+  private readonly loadedMonthSignal = signal<Date | null>(null);
 
   // Month-scoped loads are fired again on every month switch and can come back
   // out of order. Each one takes a ticket and publishes only if it is still the
@@ -205,6 +206,12 @@ export class BudgetService {
   readonly balances = this.balancesSignal.asReadonly();
   readonly recurringRules = this.recurringRulesSignal.asReadonly();
   readonly monthlySpending = this.monthlySpendingSignal.asReadonly();
+  /**
+   * The month the published balances/spending pair belongs to, so a page can
+   * tell whether what it holds is the month it is showing. Null once balances
+   * have been loaded on their own, which is not a month snapshot.
+   */
+  readonly loadedMonth = this.loadedMonthSignal.asReadonly();
 
   async loadEnvelope(envelopeId: string): Promise<Envelope> {
     const householdId = this.requireHouseholdId();
@@ -246,6 +253,7 @@ export class BudgetService {
 
     if (request === this.monthRequest) {
       this.balancesSignal.set(balances);
+      this.loadedMonthSignal.set(null);
     }
 
     return balances;
@@ -273,6 +281,7 @@ export class BudgetService {
 
     this.balancesSignal.set(balances);
     this.monthlySpendingSignal.set(spending);
+    this.loadedMonthSignal.set(input.from);
   }
 
   private async fetchBalances(asOf: Date): Promise<Record<string, EnvelopeBalance>> {

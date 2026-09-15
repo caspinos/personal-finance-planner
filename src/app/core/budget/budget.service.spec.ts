@@ -117,6 +117,28 @@ describe('BudgetService.loadMonth', () => {
     expect(budget.monthlySpending()['envelope-1']).toBe(400);
   });
 
+  it("counts a month's amortization slices alongside its plain expenses", async () => {
+    const supabase = fakeSupabase();
+    const budget = serviceWith(supabase);
+
+    const load = budget.loadMonth(JUNE);
+
+    supabase.calls.balances[0].resolve(balancesRow(600));
+    supabase.calls.expenses[0].resolve(expenseRow(120));
+    // The lump payment behind this slice is budget-neutral and is filtered out
+    // of the expense query; only the slice due this month consumes the budget.
+    supabase.calls.charges[0].resolve({
+      data: [
+        { envelope_id: 'envelope-1', amount: 83.33 },
+        { envelope_id: 'envelope-2', amount: 50 },
+      ],
+    });
+    await load;
+
+    expect(budget.monthlySpending()['envelope-1']).toBeCloseTo(203.33);
+    expect(budget.monthlySpending()['envelope-2']).toBe(50);
+  });
+
   it('leaves both signals untouched when one of the two queries fails', async () => {
     const supabase = fakeSupabase();
     const budget = serviceWith(supabase);

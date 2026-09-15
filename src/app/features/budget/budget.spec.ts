@@ -37,19 +37,34 @@ interface BudgetState {
   deferMonthLoads?: ((error?: Error) => void)[];
 }
 
-/** Stands in for the loaded state the budget page renders from. */
+/**
+ * Stands in for the loaded state the budget page renders from. Like the real
+ * service it stamps the loaded pair with its month, which is what the page
+ * waits for before drawing tiles.
+ */
 function fakeBudgetService(input: BudgetState) {
-  const loadMonth = () => {
+  const loadedMonth = signal<Date | null>(null);
+
+  const loadMonth = (request: { from: Date; to: Date }) => {
     if (input.loadError) {
       return Promise.reject(input.loadError);
     }
 
     if (!input.deferMonthLoads) {
+      loadedMonth.set(request.from);
       return Promise.resolve();
     }
 
     return new Promise<void>((resolve, reject) => {
-      input.deferMonthLoads?.push((error?: Error) => (error ? reject(error) : resolve()));
+      input.deferMonthLoads?.push((error?: Error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        loadedMonth.set(request.from);
+        resolve();
+      });
     });
   };
 
@@ -58,6 +73,7 @@ function fakeBudgetService(input: BudgetState) {
     activeEnvelopes: signal(input.envelopes),
     balances: signal(input.balances),
     monthlySpending: signal(input.spending),
+    loadedMonth,
     recurringRules: signal([]),
     loadEnvelopes: () => Promise.resolve(input.envelopes),
     loadMonth,
@@ -141,7 +157,7 @@ describe('Budget envelope tiles', () => {
     expect(fill.classList).toContain('bg-budget-over-pace');
   });
 
-  it('clears the spinner and shows the reason when a month fails to load', async () => {
+  it('shows the reason and no tiles when a month fails to load', async () => {
     const { root } = await renderBudget({
       envelopes: [envelope('envelope-1', 'Groceries')],
       balances: {},
@@ -150,7 +166,38 @@ describe('Budget envelope tiles', () => {
     });
 
     expect(root.textContent).toContain('network is down');
-    // The page came out of its loading state rather than hanging on the spinner.
+    // Nothing was loaded for this month, so there is no pace to draw -- and the
+    // page says so instead of sitting on the spinner behind the alert.
+    expect(root.querySelector('li[data-slot="card"]')).toBeNull();
+    expect(root.textContent).not.toContain('budget.loadingEnvelopes');
+  });
+
+  it("never labels a new month with the previous month's tiles", async () => {
+    const settlers: ((error?: Error) => void)[] = [];
+    const { fixture, root } = await renderBudget({
+      envelopes: [envelope('envelope-1', 'Groceries')],
+      balances: { 'envelope-1': { balance: 600, balance_in_base: null } },
+      spending: { 'envelope-1': 400 },
+      deferMonthLoads: settlers,
+    });
+
+    settlers[0]?.(); // the initial load
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(root.querySelector('li[data-slot="card"]')).not.toBeNull();
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Previous month"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // May is in the header now; June's balances and pace must not be sitting
+    // under it while May is still on the way.
+    expect(root.textContent).toContain('May 2026');
+    expect(root.querySelector('li[data-slot="card"]')).toBeNull();
+
+    settlers[1]?.();
+    await flushMicrotasks();
+    fixture.detectChanges();
     expect(root.querySelector('li[data-slot="card"]')).not.toBeNull();
   });
 
@@ -188,6 +235,7 @@ describe('Budget envelope tiles', () => {
     });
 
     root.querySelector<HTMLButtonElement>('[aria-label="Previous month"]')!.click();
+    await flushMicrotasks();
     fixture.detectChanges();
 
     const { fill, marker } = indicators(root);

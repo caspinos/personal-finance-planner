@@ -110,8 +110,14 @@ function endOfMonth(date: Date): Date {
         </div>
       }
 
-      @if (loading()) {
-        <p class="text-muted-foreground text-sm">{{ 'budget.loadingEnvelopes' | transloco }}</p>
+      <!-- Balances and spending are published as one month-stamped pair, and the
+           tiles are drawn only once the pair on hand is the month in the header:
+           a switch must never label another month's numbers, and a failed one
+           must not leave them standing under the alert. -->
+      @if (!monthReady()) {
+        @if (!errorMessage()) {
+          <p class="text-muted-foreground text-sm">{{ 'budget.loadingEnvelopes' | transloco }}</p>
+        }
       } @else if (envelopes().length === 0) {
         <div hlmCard size="sm" class="max-w-md">
           <div hlmCardHeader>
@@ -303,7 +309,6 @@ export class Budget {
   /** Identifies the load whose outcome the page is still interested in. */
   private loadRequest = 0;
 
-  protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly today = signal(new Date());
   protected readonly month = signal(startOfMonth(this.today()));
@@ -318,6 +323,11 @@ export class Budget {
 
   protected readonly monthLabel = computed(() =>
     this.month().toLocaleDateString(this.language.localeTag(), { month: 'long', year: 'numeric' }),
+  );
+
+  /** Whether the loaded balances/spending pair is the month the header shows. */
+  protected readonly monthReady = computed(
+    () => this.budget.loadedMonth()?.getTime() === this.month().getTime(),
   );
 
   /** Share of the displayed month already behind us; drives the vertical marker. */
@@ -397,7 +407,6 @@ export class Budget {
 
   private async loadAll(): Promise<void> {
     const request = ++this.loadRequest;
-    this.loading.set(true);
     this.errorMessage.set(null);
 
     try {
@@ -406,8 +415,6 @@ export class Budget {
       await Promise.all([this.loadMonth(), this.budget.loadRecurringRules()]);
     } catch (error) {
       this.reportFailure(request, error);
-    } finally {
-      this.loading.set(false);
     }
   }
 
@@ -430,12 +437,13 @@ export class Budget {
   }
 
   /**
-   * Both sides of the pace ratio are measured over the whole month, never up to
-   * today: the balance the tile shows is the end-of-month one, so an expense or
-   * a top-up booked for later this month is already in the denominator and has
-   * to be in the numerator too. Cutting the spending window at today instead
-   * would shrink the budget an envelope is judged against and overstate its
-   * usage.
+   * The window is the whole month on both sides of the ratio, never up to today.
+   * The numerator stays expense-only (income and transfers move the budget, not
+   * the usage), but it has to span the same month as the denominator: the tile's
+   * balance is the end-of-month one, so an expense booked for later this month
+   * has already been subtracted from it. Cutting the spending window at today
+   * would drop that expense from the numerator while the balance keeps it,
+   * shrinking the budget the envelope is judged against and overstating usage.
    */
   private async loadMonth(): Promise<void> {
     this.refreshToday();
