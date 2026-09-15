@@ -40,6 +40,13 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Budget-pace washes, painted behind an envelope tile. Deliberately pale:
+     every one of the tile's own colours keeps its WCAG AA contrast on top of
+     them, including the 4.74:1 --muted-foreground and the 4.77:1 --destructive
+     balance, which leaves very little luminance to spend on a tint. */
+  --budget-on-track: oklch(0.98 0.028 152);
+  --budget-over-pace: oklch(0.982 0.038 95);
 }
 
 :root.dark {
@@ -71,6 +78,17 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  --budget-on-track: oklch(0.3 0.045 152);
+  --budget-over-pace: oklch(0.3 0.05 95);
+}
+
+/* Exposes the budget-pace tokens as Tailwind color utilities
+   (bg-budget-on-track / bg-budget-over-pace), the same way the spartan preset
+   exposes the rest of the palette. */
+@theme inline {
+  --color-budget-on-track: var(--budget-on-track);
+  --color-budget-over-pace: var(--budget-over-pace);
 }
 
 @layer base {

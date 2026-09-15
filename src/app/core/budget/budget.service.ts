@@ -192,11 +192,26 @@ export class BudgetService {
   private readonly envelopesSignal = signal<Envelope[]>([]);
   private readonly balancesSignal = signal<Record<string, EnvelopeBalance>>({});
   private readonly recurringRulesSignal = signal<RecurringEnvelopeRule[]>([]);
+  private readonly monthlySpendingSignal = signal<Record<string, number>>({});
+  private readonly loadedMonthSignal = signal<Date | null>(null);
+
+  // Month-scoped loads are fired again on every month switch and can come back
+  // out of order. Each one takes a ticket and publishes only if it is still the
+  // newest, so a response for an abandoned month can never overwrite the month
+  // now on screen.
+  private monthRequest = 0;
 
   readonly envelopes = this.envelopesSignal.asReadonly();
   readonly activeEnvelopes = computed(() => this.envelopesSignal().filter((e) => !e.archived));
   readonly balances = this.balancesSignal.asReadonly();
   readonly recurringRules = this.recurringRulesSignal.asReadonly();
+  readonly monthlySpending = this.monthlySpendingSignal.asReadonly();
+  /**
+   * The month the published balances/spending pair belongs to, so a page can
+   * tell whether what it holds is the month it is showing. Null once balances
+   * have been loaded on their own, which is not a month snapshot.
+   */
+  readonly loadedMonth = this.loadedMonthSignal.asReadonly();
 
   async loadEnvelope(envelopeId: string): Promise<Envelope> {
     const householdId = this.requireHouseholdId();
@@ -233,6 +248,43 @@ export class BudgetService {
   }
 
   async loadBalances(asOf: Date): Promise<Record<string, EnvelopeBalance>> {
+    const request = ++this.monthRequest;
+    const balances = await this.fetchBalances(asOf);
+
+    if (request === this.monthRequest) {
+      this.balancesSignal.set(balances);
+      this.loadedMonthSignal.set(null);
+    }
+
+    return balances;
+  }
+
+  /**
+   * Loads the pair the envelope tiles are drawn from -- the balances at the end
+   * of a month and what was spent within it -- and publishes them together.
+   * The tiles render a ratio between the two, so the pair has to come from the
+   * same month: they are set only once both queries have answered for the
+   * newest request, and a failure of either leaves both signals untouched
+   * rather than half-updating them.
+   */
+  async loadMonth(input: { from: Date; to: Date }): Promise<void> {
+    const request = ++this.monthRequest;
+
+    const [balances, spending] = await Promise.all([
+      this.fetchBalances(input.to),
+      this.fetchMonthlySpending(input.from, input.to),
+    ]);
+
+    if (request !== this.monthRequest) {
+      return;
+    }
+
+    this.balancesSignal.set(balances);
+    this.monthlySpendingSignal.set(spending);
+    this.loadedMonthSignal.set(input.from);
+  }
+
+  private async fetchBalances(asOf: Date): Promise<Record<string, EnvelopeBalance>> {
     const householdId = this.requireHouseholdId();
 
     const { data, error } = await this.supabase.rpc('get_envelope_balances', {
@@ -252,8 +304,64 @@ export class BudgetService {
       };
     }
 
-    this.balancesSignal.set(balances);
     return balances;
+  }
+
+  /**
+   * How much each envelope consumed between `from` and `to`, keyed by envelope
+   * id: plain expenses plus the amortization slices due in that window. It
+   * mirrors what `get_envelope_balances` subtracts -- an amortized payment is
+   * budget-neutral and only its slices count (invariants #1 and #2 of
+   * `20260705040000_amortized_expenses.sql`).
+   *
+   * Income and transfers are deliberately excluded. They change how much an
+   * envelope *had*, not how much of it was used.
+   */
+  private async fetchMonthlySpending(from: Date, to: Date): Promise<Record<string, number>> {
+    const householdId = this.requireHouseholdId();
+    const fromDate = toDateOnly(from);
+    const toDate = toDateOnly(to);
+
+    const expenseQuery = this.supabase
+      .from('budget_transactions')
+      .select('envelope_id, amount')
+      .eq('household_id', householdId)
+      .eq('type', 'expense')
+      .is('amortized_months', null)
+      .gte('occurred_on', fromDate)
+      .lte('occurred_on', toDate);
+
+    const chargesQuery = this.supabase.rpc('get_amortized_charges', {
+      p_household_id: householdId,
+      p_from: fromDate,
+      p_to: toDate,
+    });
+
+    const [{ data: expenses, error: expensesError }, { data: charges, error: chargesError }] =
+      await Promise.all([expenseQuery, chargesQuery]);
+
+    if (expensesError) {
+      throw expensesError;
+    }
+
+    if (chargesError) {
+      throw chargesError;
+    }
+
+    const spending: Record<string, number> = {};
+    const add = (envelopeId: string, amount: number) => {
+      spending[envelopeId] = (spending[envelopeId] ?? 0) + amount;
+    };
+
+    for (const expense of expenses ?? []) {
+      add(expense.envelope_id, Number(expense.amount));
+    }
+
+    for (const charge of (charges ?? []) as AmortizedCharge[]) {
+      add(charge.envelope_id, Number(charge.amount));
+    }
+
+    return spending;
   }
 
   async loadEnvelopeEvents(input: {

@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 
@@ -12,6 +12,7 @@ import {
   lucidePlay,
   lucideTrash2,
 } from '@ng-icons/lucide';
+import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
@@ -20,6 +21,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { BudgetService } from '../../core/budget/budget.service';
 import { HouseholdService } from '../../core/household/household.service';
 import { LanguageService } from '../../core/i18n/language.service';
+import { EnvelopePace, envelopePace, monthElapsedRatio } from './budget-pace';
 
 function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -35,6 +37,7 @@ function endOfMonth(date: Date): Date {
     NgIcon,
     RouterLink,
     DecimalPipe,
+    HlmAlertImports,
     HlmButtonImports,
     HlmCardImports,
     HlmSpinnerImports,
@@ -100,8 +103,21 @@ function endOfMonth(date: Date): Date {
         </div>
       </div>
 
-      @if (loading()) {
-        <p class="text-muted-foreground text-sm">{{ 'budget.loadingEnvelopes' | transloco }}</p>
+      @if (errorMessage()) {
+        <div hlmAlert variant="destructive">
+          <p hlmAlertTitle>{{ 'budget.loadErrorTitle' | transloco }}</p>
+          <p hlmAlertDescription>{{ errorMessage() }}</p>
+        </div>
+      }
+
+      <!-- Balances and spending are published as one month-stamped pair, and the
+           tiles are drawn only once the pair on hand is the month in the header:
+           a switch must never label another month's numbers, and a failed one
+           must not leave them standing under the alert. -->
+      @if (!monthReady()) {
+        @if (!errorMessage()) {
+          <p class="text-muted-foreground text-sm">{{ 'budget.loadingEnvelopes' | transloco }}</p>
+        }
       } @else if (envelopes().length === 0) {
         <div hlmCard size="sm" class="max-w-md">
           <div hlmCardHeader>
@@ -112,13 +128,39 @@ function endOfMonth(date: Date): Date {
       } @else {
         <ul class="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
           @for (envelope of envelopes(); track envelope.id) {
-            <li hlmCard size="sm">
-              <div class="flex items-center gap-2 px-3">
+            @let pace = paces()[envelope.id];
+            <li hlmCard size="sm" class="relative">
+              <!-- Budget consumed, filling left to right; amber once spending
+                   has outrun the month, green while it is still behind it. -->
+              <div
+                aria-hidden="true"
+                class="pointer-events-none absolute inset-y-0 left-0"
+                [class.bg-budget-on-track]="!pace.overPace"
+                [class.bg-budget-over-pace]="pace.overPace"
+                [style.width.%]="pace.fillRatio * 100"
+              ></div>
+              <!-- How far into the month we are. Only drawn for a month that is
+                   actually running: for a past or future one it would sit flat
+                   against an edge and say nothing. -->
+              @if (elapsedRatio() > 0 && elapsedRatio() < 1) {
+                <div
+                  aria-hidden="true"
+                  class="bg-muted-foreground/50 pointer-events-none absolute inset-y-0 w-px"
+                  [style.left.%]="elapsedRatio() * 100"
+                ></div>
+              }
+              <div class="relative flex items-center gap-2 px-3">
                 <div class="flex min-w-0 flex-1 flex-col">
                   <div class="flex items-baseline justify-between gap-2">
                     <h2 class="truncate text-sm font-medium" [title]="envelope.name">
                       {{ envelope.name }}
                     </h2>
+                    <span class="sr-only">
+                      {{
+                        (pace.hasBudget ? 'budget.pace' : 'budget.paceNoBudget')
+                          | transloco: { used: pace.usedPercent, elapsed: elapsedPercent() }
+                      }}
+                    </span>
                     <span
                       class="shrink-0 text-sm font-semibold tabular-nums"
                       [class.text-destructive]="(balances()[envelope.id]?.balance ?? 0) < 0"
@@ -262,8 +304,14 @@ export class Budget {
   private readonly transloco = inject(TranslocoService);
   private readonly language = inject(LanguageService);
 
-  protected readonly loading = signal(true);
-  protected readonly month = signal(startOfMonth(new Date()));
+  private readonly destroyRef = inject(DestroyRef);
+  private dateRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Identifies the load whose outcome the page is still interested in. */
+  private loadRequest = 0;
+
+  protected readonly errorMessage = signal<string | null>(null);
+  protected readonly today = signal(new Date());
+  protected readonly month = signal(startOfMonth(this.today()));
   protected readonly envelopes = this.budget.activeEnvelopes;
   protected readonly balances = this.budget.balances;
   protected readonly recurringRules = this.budget.recurringRules;
@@ -277,20 +325,53 @@ export class Budget {
     this.month().toLocaleDateString(this.language.localeTag(), { month: 'long', year: 'numeric' }),
   );
 
+  /** Whether the loaded balances/spending pair is the month the header shows. */
+  protected readonly monthReady = computed(
+    () => this.budget.loadedMonth()?.getTime() === this.month().getTime(),
+  );
+
+  /** Share of the displayed month already behind us; drives the vertical marker. */
+  protected readonly elapsedRatio = computed(() => monthElapsedRatio(this.month(), this.today()));
+  protected readonly elapsedPercent = computed(() => Math.round(this.elapsedRatio() * 100));
+
+  /**
+   * Budget-usage-versus-time for every envelope, keyed by id. Spending comes from
+   * the month's own charges, while the denominator is derived from the balance
+   * left at the end of it -- see `envelopePace`.
+   */
+  protected readonly paces = computed<Record<string, EnvelopePace>>(() => {
+    const elapsed = this.elapsedRatio();
+    const spending = this.budget.monthlySpending();
+    const balances = this.balances();
+
+    const paces: Record<string, EnvelopePace> = {};
+    for (const envelope of this.envelopes()) {
+      paces[envelope.id] = envelopePace(
+        spending[envelope.id] ?? 0,
+        balances[envelope.id]?.balance ?? 0,
+        elapsed,
+      );
+    }
+
+    return paces;
+  });
+
   constructor() {
+    this.scheduleDateRefresh();
+    this.destroyRef.onDestroy(() => clearTimeout(this.dateRefreshTimer));
     void this.loadAll();
   }
 
   protected previousMonth(): void {
     const current = this.month();
     this.month.set(new Date(current.getFullYear(), current.getMonth() - 1, 1));
-    void this.loadBalances();
+    this.reloadMonth();
   }
 
   protected nextMonth(): void {
     const current = this.month();
     this.month.set(new Date(current.getFullYear(), current.getMonth() + 1, 1));
-    void this.loadBalances();
+    this.reloadMonth();
   }
 
   protected envelopeName(envelopeId: string): string {
@@ -325,14 +406,82 @@ export class Budget {
   }
 
   private async loadAll(): Promise<void> {
-    this.loading.set(true);
-    await this.budget.loadEnvelopes();
-    await this.budget.processDueRecurringRules();
-    await Promise.all([this.loadBalances(), this.budget.loadRecurringRules()]);
-    this.loading.set(false);
+    const request = ++this.loadRequest;
+    this.errorMessage.set(null);
+
+    try {
+      await this.budget.loadEnvelopes();
+      await this.budget.processDueRecurringRules();
+      await Promise.all([this.loadMonth(), this.budget.loadRecurringRules()]);
+    } catch (error) {
+      this.reportFailure(request, error);
+    }
   }
 
-  private async loadBalances(): Promise<void> {
-    await this.budget.loadBalances(endOfMonth(this.month()));
+  /** Month switches surface their own failures rather than rejecting unheard. */
+  private reloadMonth(): void {
+    const request = ++this.loadRequest;
+    this.errorMessage.set(null);
+    void this.loadMonth().catch((error: unknown) => this.reportFailure(request, error));
+  }
+
+  /**
+   * An abandoned load can fail long after the user moved on. Only the newest
+   * one may put a message on screen, so a month the page has left behind cannot
+   * leave a stale failure over the month now shown.
+   */
+  private reportFailure(request: number, error: unknown): void {
+    if (request === this.loadRequest) {
+      this.errorMessage.set(this.extractMessage(error));
+    }
+  }
+
+  /**
+   * The window is the whole month on both sides of the ratio, never up to today.
+   * The numerator stays expense-only (income and transfers move the budget, not
+   * the usage), but it has to span the same month as the denominator: the tile's
+   * balance is the end-of-month one, so an expense booked for later this month
+   * has already been subtracted from it. Cutting the spending window at today
+   * would drop that expense from the numerator while the balance keeps it,
+   * shrinking the budget the envelope is judged against and overstating usage.
+   */
+  private async loadMonth(): Promise<void> {
+    this.refreshToday();
+    const month = this.month();
+
+    await this.budget.loadMonth({ from: month, to: endOfMonth(month) });
+  }
+
+  /**
+   * Keeps `today` on the actual current day: the page can sit open across
+   * midnight, and a stale date would leave the elapsed-month marker a day
+   * behind (and with it the green/amber verdict).
+   */
+  private scheduleDateRefresh(): void {
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    this.dateRefreshTimer = setTimeout(() => {
+      this.today.set(new Date());
+      this.scheduleDateRefresh();
+    }, nextMidnight.getTime() - now.getTime());
+  }
+
+  private refreshToday(): void {
+    const now = new Date();
+    if (now.toDateString() !== this.today().toDateString()) {
+      this.today.set(now);
+    }
+  }
+
+  private extractMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    if (error && typeof error === 'object' && 'message' in error) {
+      return String((error as { message: unknown }).message);
+    }
+
+    return 'Something went wrong.';
   }
 }

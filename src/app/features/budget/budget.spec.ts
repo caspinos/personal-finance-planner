@@ -1,0 +1,247 @@
+import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { signal } from '@angular/core';
+import { Translation, TranslocoLoader, provideTransloco } from '@jsverse/transloco';
+
+import { Budget } from './budget';
+import { BudgetService, Envelope, EnvelopeBalance } from '../../core/budget/budget.service';
+import { HouseholdService } from '../../core/household/household.service';
+
+class FakeTranslocoLoader implements TranslocoLoader {
+  getTranslation(): Promise<Translation> {
+    return Promise.resolve({});
+  }
+}
+
+function envelope(id: string, name: string): Envelope {
+  return {
+    id,
+    household_id: 'household-1',
+    name,
+    archived: false,
+    created_by: 'user-1',
+    created_at: '2026-01-01T00:00:00Z',
+  };
+}
+
+interface BudgetState {
+  envelopes: Envelope[];
+  balances: Record<string, EnvelopeBalance>;
+  spending: Record<string, number>;
+  /** When set, loading the month rejects with it. */
+  loadError?: Error;
+  /**
+   * When set, `loadMonth` hands back a promise the test settles by hand, so a
+   * month switch can be left in flight. Settlers arrive in call order.
+   */
+  deferMonthLoads?: ((error?: Error) => void)[];
+}
+
+/**
+ * Stands in for the loaded state the budget page renders from. Like the real
+ * service it stamps the loaded pair with its month, which is what the page
+ * waits for before drawing tiles.
+ */
+function fakeBudgetService(input: BudgetState) {
+  const loadedMonth = signal<Date | null>(null);
+
+  const loadMonth = (request: { from: Date; to: Date }) => {
+    if (input.loadError) {
+      return Promise.reject(input.loadError);
+    }
+
+    if (!input.deferMonthLoads) {
+      loadedMonth.set(request.from);
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      input.deferMonthLoads?.push((error?: Error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        loadedMonth.set(request.from);
+        resolve();
+      });
+    });
+  };
+
+  return {
+    envelopes: signal(input.envelopes),
+    activeEnvelopes: signal(input.envelopes),
+    balances: signal(input.balances),
+    monthlySpending: signal(input.spending),
+    loadedMonth,
+    recurringRules: signal([]),
+    loadEnvelopes: () => Promise.resolve(input.envelopes),
+    loadMonth,
+    loadRecurringRules: () => Promise.resolve([]),
+    processDueRecurringRules: () => Promise.resolve(0),
+  };
+}
+
+/** Lets every already-settled promise run its continuations. */
+function flushMicrotasks(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function renderBudget(input: BudgetState) {
+  TestBed.configureTestingModule({
+    imports: [Budget],
+    providers: [
+      provideRouter([]),
+      provideTransloco({
+        config: { availableLangs: ['en'], defaultLang: 'en', fallbackLang: 'en' },
+        loader: FakeTranslocoLoader,
+      }),
+      { provide: BudgetService, useValue: fakeBudgetService(input) },
+      { provide: HouseholdService, useValue: { currentHousehold: signal(null) } },
+    ],
+  });
+
+  const fixture = TestBed.createComponent(Budget);
+  // The page loads its month in the constructor; let that settle before reading
+  // the rendered tiles.
+  await fixture.whenStable();
+  fixture.detectChanges();
+
+  return { fixture, root: fixture.nativeElement as HTMLElement };
+}
+
+/** The two washes behind a tile, in template order: budget fill, then the month marker. */
+function indicators(root: HTMLElement, index = 0) {
+  const tile = root.querySelectorAll('li[data-slot="card"]')[index];
+  const washes = tile.querySelectorAll<HTMLElement>(':scope > [aria-hidden="true"]');
+  return { fill: washes[0], marker: washes[1] };
+}
+
+describe('Budget envelope tiles', () => {
+  beforeEach(() => {
+    // Mid-June: half the month gone, so a 50% usage sits exactly on pace.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 5, 15));
+    TestBed.resetTestingModule();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('fills the tile to the share of the budget used and marks the month elapsed', async () => {
+    const { root } = await renderBudget({
+      envelopes: [envelope('envelope-1', 'Groceries')],
+      balances: { 'envelope-1': { balance: 600, balance_in_base: null } },
+      spending: { 'envelope-1': 400 },
+    });
+
+    const { fill, marker } = indicators(root);
+
+    expect(fill.style.width).toBe('40%');
+    expect(fill.classList).toContain('bg-budget-on-track');
+    expect(fill.classList).not.toContain('bg-budget-over-pace');
+    expect(marker.style.left).toBe('50%');
+  });
+
+  it('turns amber once spending has outrun the month', async () => {
+    const { root } = await renderBudget({
+      envelopes: [envelope('envelope-1', 'Groceries')],
+      balances: { 'envelope-1': { balance: 400, balance_in_base: null } },
+      spending: { 'envelope-1': 600 },
+    });
+
+    const { fill } = indicators(root);
+
+    expect(fill.style.width).toBe('60%');
+    expect(fill.classList).toContain('bg-budget-over-pace');
+  });
+
+  it('shows the reason and no tiles when a month fails to load', async () => {
+    const { root } = await renderBudget({
+      envelopes: [envelope('envelope-1', 'Groceries')],
+      balances: {},
+      spending: {},
+      loadError: new Error('network is down'),
+    });
+
+    expect(root.textContent).toContain('network is down');
+    // Nothing was loaded for this month, so there is no pace to draw -- and the
+    // page says so instead of sitting on the spinner behind the alert.
+    expect(root.querySelector('li[data-slot="card"]')).toBeNull();
+    expect(root.textContent).not.toContain('budget.loadingEnvelopes');
+  });
+
+  it("never labels a new month with the previous month's tiles", async () => {
+    const settlers: ((error?: Error) => void)[] = [];
+    const { fixture, root } = await renderBudget({
+      envelopes: [envelope('envelope-1', 'Groceries')],
+      balances: { 'envelope-1': { balance: 600, balance_in_base: null } },
+      spending: { 'envelope-1': 400 },
+      deferMonthLoads: settlers,
+    });
+
+    settlers[0]?.(); // the initial load
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(root.querySelector('li[data-slot="card"]')).not.toBeNull();
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Previous month"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // May is in the header now; June's balances and pace must not be sitting
+    // under it while May is still on the way.
+    expect(root.textContent).toContain('May 2026');
+    expect(root.querySelector('li[data-slot="card"]')).toBeNull();
+
+    settlers[1]?.();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(root.querySelector('li[data-slot="card"]')).not.toBeNull();
+  });
+
+  it("keeps an abandoned month's failure off the month now on screen", async () => {
+    const settlers: ((error?: Error) => void)[] = [];
+    const { fixture, root } = await renderBudget({
+      envelopes: [envelope('envelope-1', 'Groceries')],
+      balances: { 'envelope-1': { balance: 600, balance_in_base: null } },
+      spending: { 'envelope-1': 400 },
+      deferMonthLoads: settlers,
+    });
+
+    settlers[0]?.(); // the initial load
+    await flushMicrotasks();
+
+    const previous = root.querySelector<HTMLButtonElement>('[aria-label="Previous month"]')!;
+    previous.click();
+    previous.click();
+
+    // The second switch lands first; the one the user moved on from fails after.
+    settlers[2]?.();
+    await flushMicrotasks();
+    settlers[1]?.(new Error('network is down'));
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(root.textContent).not.toContain('network is down');
+  });
+
+  it('drops the marker for a month that is not running', async () => {
+    const { fixture, root } = await renderBudget({
+      envelopes: [envelope('envelope-1', 'Groceries')],
+      balances: { 'envelope-1': { balance: 600, balance_in_base: null } },
+      spending: { 'envelope-1': 400 },
+    });
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Previous month"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const { fill, marker } = indicators(root);
+
+    expect(marker).toBeUndefined();
+    // A finished month only turns amber when the envelope was actually overspent.
+    expect(fill.classList).toContain('bg-budget-on-track');
+  });
+});

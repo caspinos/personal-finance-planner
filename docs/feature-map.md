@@ -98,6 +98,16 @@ Status legend: ✅ done · 🚧 in progress / partial · ⬜ not started
   `delete_envelope_with_transfer(household_id, envelope_id, target_envelope_id)`
   SQL function so history is preserved (transfers between the two envelopes
   collapse and are dropped)
+- ✅ Spending-pace indicators behind each envelope tile: the tile fills left to
+  right with the share of its available budget already used (carry-over plus the
+  month's top-ups and transfers, i.e. `spent / (spent + end-of-month balance)`),
+  green while that share trails the share of the month elapsed and amber once it
+  runs ahead, with a vertical marker at today's position in the month. Both
+  washes are `aria-hidden` decoration over a screen-reader sentence, and their
+  colours are pale enough that every colour on the tile -- including the
+  `--muted-foreground` sub-line and a `--destructive` negative balance -- keeps
+  its WCAG AA contrast on top of them. Maths in `budget-pace.ts`
+  (`budget-pace.spec.ts`), rendering covered by `budget.spec.ts`
 - ⬜ Recurring transactions
 - ✅ Per-envelope transaction history view with monthly filtering, edit links,
   and delete actions for transactions/transfers
