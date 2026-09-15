@@ -28,12 +28,31 @@ interface BudgetState {
   envelopes: Envelope[];
   balances: Record<string, EnvelopeBalance>;
   spending: Record<string, number>;
-  /** When set, the monthly-spending query rejects with it. */
-  spendingError?: Error;
+  /** When set, loading the month rejects with it. */
+  loadError?: Error;
+  /**
+   * When set, `loadMonth` hands back a promise the test settles by hand, so a
+   * month switch can be left in flight. Settlers arrive in call order.
+   */
+  deferMonthLoads?: ((error?: Error) => void)[];
 }
 
 /** Stands in for the loaded state the budget page renders from. */
 function fakeBudgetService(input: BudgetState) {
+  const loadMonth = () => {
+    if (input.loadError) {
+      return Promise.reject(input.loadError);
+    }
+
+    if (!input.deferMonthLoads) {
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      input.deferMonthLoads?.push((error?: Error) => (error ? reject(error) : resolve()));
+    });
+  };
+
   return {
     envelopes: signal(input.envelopes),
     activeEnvelopes: signal(input.envelopes),
@@ -41,12 +60,15 @@ function fakeBudgetService(input: BudgetState) {
     monthlySpending: signal(input.spending),
     recurringRules: signal([]),
     loadEnvelopes: () => Promise.resolve(input.envelopes),
-    loadBalances: () => Promise.resolve(input.balances),
-    loadMonthlySpending: () =>
-      input.spendingError ? Promise.reject(input.spendingError) : Promise.resolve(input.spending),
+    loadMonth,
     loadRecurringRules: () => Promise.resolve([]),
     processDueRecurringRules: () => Promise.resolve(0),
   };
+}
+
+/** Lets every already-settled promise run its continuations. */
+function flushMicrotasks(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 async function renderBudget(input: BudgetState) {
@@ -124,12 +146,38 @@ describe('Budget envelope tiles', () => {
       envelopes: [envelope('envelope-1', 'Groceries')],
       balances: {},
       spending: {},
-      spendingError: new Error('network is down'),
+      loadError: new Error('network is down'),
     });
 
     expect(root.textContent).toContain('network is down');
     // The page came out of its loading state rather than hanging on the spinner.
     expect(root.querySelector('li[data-slot="card"]')).not.toBeNull();
+  });
+
+  it("keeps an abandoned month's failure off the month now on screen", async () => {
+    const settlers: ((error?: Error) => void)[] = [];
+    const { fixture, root } = await renderBudget({
+      envelopes: [envelope('envelope-1', 'Groceries')],
+      balances: { 'envelope-1': { balance: 600, balance_in_base: null } },
+      spending: { 'envelope-1': 400 },
+      deferMonthLoads: settlers,
+    });
+
+    settlers[0]?.(); // the initial load
+    await flushMicrotasks();
+
+    const previous = root.querySelector<HTMLButtonElement>('[aria-label="Previous month"]')!;
+    previous.click();
+    previous.click();
+
+    // The second switch lands first; the one the user moved on from fails after.
+    settlers[2]?.();
+    await flushMicrotasks();
+    settlers[1]?.(new Error('network is down'));
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(root.textContent).not.toContain('network is down');
   });
 
   it('drops the marker for a month that is not running', async () => {

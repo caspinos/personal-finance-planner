@@ -300,6 +300,8 @@ export class Budget {
 
   private readonly destroyRef = inject(DestroyRef);
   private dateRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Identifies the load whose outcome the page is still interested in. */
+  private loadRequest = 0;
 
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
@@ -394,6 +396,7 @@ export class Budget {
   }
 
   private async loadAll(): Promise<void> {
+    const request = ++this.loadRequest;
     this.loading.set(true);
     this.errorMessage.set(null);
 
@@ -402,7 +405,7 @@ export class Budget {
       await this.budget.processDueRecurringRules();
       await Promise.all([this.loadMonth(), this.budget.loadRecurringRules()]);
     } catch (error) {
-      this.errorMessage.set(this.extractMessage(error));
+      this.reportFailure(request, error);
     } finally {
       this.loading.set(false);
     }
@@ -410,10 +413,20 @@ export class Budget {
 
   /** Month switches surface their own failures rather than rejecting unheard. */
   private reloadMonth(): void {
+    const request = ++this.loadRequest;
     this.errorMessage.set(null);
-    void this.loadMonth().catch((error: unknown) =>
-      this.errorMessage.set(this.extractMessage(error)),
-    );
+    void this.loadMonth().catch((error: unknown) => this.reportFailure(request, error));
+  }
+
+  /**
+   * An abandoned load can fail long after the user moved on. Only the newest
+   * one may put a message on screen, so a month the page has left behind cannot
+   * leave a stale failure over the month now shown.
+   */
+  private reportFailure(request: number, error: unknown): void {
+    if (request === this.loadRequest) {
+      this.errorMessage.set(this.extractMessage(error));
+    }
   }
 
   /**
@@ -428,10 +441,7 @@ export class Budget {
     this.refreshToday();
     const month = this.month();
 
-    await Promise.all([
-      this.budget.loadBalances(endOfMonth(month)),
-      this.budget.loadMonthlySpending(month, endOfMonth(month)),
-    ]);
+    await this.budget.loadMonth({ from: month, to: endOfMonth(month) });
   }
 
   /**

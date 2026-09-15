@@ -194,13 +194,11 @@ export class BudgetService {
   private readonly recurringRulesSignal = signal<RecurringEnvelopeRule[]>([]);
   private readonly monthlySpendingSignal = signal<Record<string, number>>({});
 
-  // Month-scoped loads are fired again on every month switch, and the responses
-  // can come back out of order. Each load takes a ticket and publishes only if
-  // it is still the newest, so a slow response for an abandoned month can never
-  // overwrite the month now on screen (nor pair its balances with another
-  // month's spending).
-  private balancesRequest = 0;
-  private monthlySpendingRequest = 0;
+  // Month-scoped loads are fired again on every month switch and can come back
+  // out of order. Each one takes a ticket and publishes only if it is still the
+  // newest, so a response for an abandoned month can never overwrite the month
+  // now on screen.
+  private monthRequest = 0;
 
   readonly envelopes = this.envelopesSignal.asReadonly();
   readonly activeEnvelopes = computed(() => this.envelopesSignal().filter((e) => !e.archived));
@@ -243,8 +241,42 @@ export class BudgetService {
   }
 
   async loadBalances(asOf: Date): Promise<Record<string, EnvelopeBalance>> {
+    const request = ++this.monthRequest;
+    const balances = await this.fetchBalances(asOf);
+
+    if (request === this.monthRequest) {
+      this.balancesSignal.set(balances);
+    }
+
+    return balances;
+  }
+
+  /**
+   * Loads the pair the envelope tiles are drawn from -- the balances at the end
+   * of a month and what was spent within it -- and publishes them together.
+   * The tiles render a ratio between the two, so the pair has to come from the
+   * same month: they are set only once both queries have answered for the
+   * newest request, and a failure of either leaves both signals untouched
+   * rather than half-updating them.
+   */
+  async loadMonth(input: { from: Date; to: Date }): Promise<void> {
+    const request = ++this.monthRequest;
+
+    const [balances, spending] = await Promise.all([
+      this.fetchBalances(input.to),
+      this.fetchMonthlySpending(input.from, input.to),
+    ]);
+
+    if (request !== this.monthRequest) {
+      return;
+    }
+
+    this.balancesSignal.set(balances);
+    this.monthlySpendingSignal.set(spending);
+  }
+
+  private async fetchBalances(asOf: Date): Promise<Record<string, EnvelopeBalance>> {
     const householdId = this.requireHouseholdId();
-    const request = ++this.balancesRequest;
 
     const { data, error } = await this.supabase.rpc('get_envelope_balances', {
       p_household_id: householdId,
@@ -263,10 +295,6 @@ export class BudgetService {
       };
     }
 
-    if (request === this.balancesRequest) {
-      this.balancesSignal.set(balances);
-    }
-
     return balances;
   }
 
@@ -280,9 +308,8 @@ export class BudgetService {
    * Income and transfers are deliberately excluded. They change how much an
    * envelope *had*, not how much of it was used.
    */
-  async loadMonthlySpending(from: Date, to: Date): Promise<Record<string, number>> {
+  private async fetchMonthlySpending(from: Date, to: Date): Promise<Record<string, number>> {
     const householdId = this.requireHouseholdId();
-    const request = ++this.monthlySpendingRequest;
     const fromDate = toDateOnly(from);
     const toDate = toDateOnly(to);
 
@@ -323,10 +350,6 @@ export class BudgetService {
 
     for (const charge of (charges ?? []) as AmortizedCharge[]) {
       add(charge.envelope_id, Number(charge.amount));
-    }
-
-    if (request === this.monthlySpendingRequest) {
-      this.monthlySpendingSignal.set(spending);
     }
 
     return spending;
